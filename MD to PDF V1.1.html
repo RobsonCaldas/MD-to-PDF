@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Editor Markdown → PDF + .MD</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Renderizador Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+
+  <!-- Highlight.js: tema + core + linguagens adicionais -->
+  <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
+
+  <!-- ═══════════════════════════════════════════════
+       ESTILOS GLOBAIS
+  ═══════════════════════════════════════════════ -->
+  <style>
+    /* ── Reset básico ── */
+    * { box-sizing: border-box; }
+
+    /* ── Layout raiz: coluna, ocupa 100vh ── */
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #f5f5f7;
+      color: #222;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Cabeçalho com título e botões de exportação ── */
+    header {
+      padding: 8px 16px;
+      background: #111827;
+      color: #f9fafb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1rem; margin: 0; }
+    header .actions { display: flex; gap: 8px; }
+
+    /* ── Botão padrão ── */
+    button {
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      background: #4f46e5;
+      color: white;
+      transition: background 0.15s;
+    }
+    button:hover { background: #4338ca; }
+
+    /* ── Barra de ferramentas ── */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 6px 8px;
+      background: #f3f4f6;
+      border-bottom: 1px solid #d1d5db;
+      flex-shrink: 0;
+      align-items: center;
+    }
+    .toolbar button {
+      background: #e5e7eb;
+      color: #111827;
+      padding: 4px 9px;
+      font-size: 0.8rem;
+    }
+    .toolbar button:hover { background: #d1d5db; }
+
+    /* Separador visual entre grupos de botões */
+    .toolbar-sep {
+      width: 1px;
+      height: 22px;
+      background: #d1d5db;
+      margin: 0 2px;
+    }
+
+    /* ── Botão seletor de cor (com swatch e input[color] oculto) ── */
+    .btn-cor {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #e5e7eb;
+      color: #111827;
+      padding: 4px 9px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      position: relative;
+      user-select: none;
+    }
+    .btn-cor:hover { background: #d1d5db; }
+    .btn-cor .cor-swatch {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      border: 1px solid #9ca3af;
+      background: #2563eb;
+      flex-shrink: 0;
+    }
+    /* O input[type=color] fica invisível; abrimos via .click() */
+    #fontColorInput {
+      position: absolute;
+      width: 0; height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* ── Botão de sincronização de scroll ── */
+    #btn-sync {
+      font-size: 0.78rem;
+      padding: 3px 9px;
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+    #btn-sync:hover { background: #a7f3d0; }
+    /* Estado desligado */
+    #btn-sync.off { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+    #btn-sync.off:hover { background: #fecaca; }
+
+    /* ── Área principal: editor + resizer + preview lado a lado ── */
+    main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      position: relative;
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 80px;
+      overflow: hidden;
+    }
+    .pane-header {
+      padding: 6px 12px;
+      background: #e5e7eb;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+
+    /* Divisor arrastável entre os painéis */
+    .resizer {
+      width: 5px;
+      background: #d1d5db;
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .resizer:hover, .resizer.active { background: #4f46e5; }
+
+    /* ── Textarea do editor (tema escuro tipo IDE) ── */
+    textarea {
+      flex: 1; width: 100%; padding: 12px;
+      border: none; resize: none; outline: none;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      font-size: 0.9rem; line-height: 1.7;
+      background: #1e1e2e; color: #cdd6f4;
+      overflow-y: auto;
+    }
+
+    /* ── Painel de pré-visualização ── */
+    #preview {
+      flex: 1; padding: 20px 24px;
+      overflow-y: auto; background: white;
+      font-size: 0.95rem; line-height: 1.8;
+    }
+
+    /* Tipografia da preview */
+    #preview h1, #preview h2, #preview h3 {
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 4px; margin-top: 1.2em; color: #111827;
+    }
+    #preview h4, #preview h5, #preview h6 { color: #111827; margin-top: 1em; }
+    #preview p   { margin: 0.5em 0; }
+    #preview a   { color: #4f46e5; }
+    #preview ul, #preview ol { padding-left: 1.4rem; margin: 0.4em 0; }
+    #preview li  { margin: 0.2em 0; }
+    #preview hr  { border: none; border-top: 1px solid #e5e7eb; margin: 1.2em 0; }
+    #preview strong { color: #111827; }
+    #preview em     { color: #374151; }
+    #preview del    { color: #9ca3af; text-decoration: line-through; }
+
+    /* Citação */
+    #preview blockquote {
+      border-left: 4px solid #a5b4fc; margin: 0.8em 0;
+      padding: 0.4em 1em; background: #f5f3ff;
+      color: #4b5563; border-radius: 0 4px 4px 0;
+    }
+
+    /* Código inline */
+    #preview code {
+      background: #1e1e2e; color: #a5d6ff;
+      padding: 2px 6px; border-radius: 3px; font-size: 0.85em;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    }
+
+    /* Bloco de código com label da linguagem via ::before */
+    #preview pre {
+      background: #0d1117; border: 1px solid #30363d;
+      border-radius: 6px; margin: 1em 0; padding: 0; overflow-x: auto;
+    }
+    #preview pre::before {
+      content: attr(data-lang); display: block;
+      background: #161b22; color: #8b949e; font-size: 0.7rem;
+      font-family: "Fira Code", Consolas, monospace;
+      padding: 3px 12px; border-bottom: 1px solid #30363d;
+      border-radius: 6px 6px 0 0; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    #preview pre code {
+      display: block; background: none; color: #c9d1d9;
+      padding: 12px 16px; font-size: 0.85em; line-height: 1.6; border-radius: 0;
+    }
+
+    /* Tabela */
+    #preview table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
+    #preview th, #preview td { border: 1px solid #e5e7eb; padding: 7px 12px; text-align: left; }
+    #preview th { background: #f3f4f6; font-weight: 600; }
+    #preview tr:nth-child(even) td { background: #f9fafb; }
+    #preview img { max-width: 100%; border-radius: 4px; }
+
+    /* ── Modal de inserção de hyperlink ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: #00000070; z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 8px;
+      padding: 24px; width: 360px; max-width: 90vw;
+      box-shadow: 0 8px 40px #0003;
+    }
+    .modal h3 { margin: 0 0 16px; font-size: 1rem; color: #111827; }
+    .modal label { display: block; font-size: 0.78rem; color: #6b7280; margin-bottom: 3px; }
+    .modal input[type="text"],
+    .modal input[type="url"] {
+      width: 100%; padding: 7px 10px;
+      border: 1px solid #d1d5db; border-radius: 5px;
+      font-size: 0.88rem; margin-bottom: 12px; outline: none;
+    }
+    .modal input:focus { border-color: #4f46e5; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-cancel { background: #f3f4f6; color: #374151; }
+    .btn-cancel:hover { background: #e5e7eb; }
+
+    /* Input de arquivo de imagem completamente oculto */
+    #imageFileInput { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     CABEÇALHO
+═══════════════════════════════════════════════ -->
+<header>
+  <h1>Editor Markdown &#8594; PDF + .MD</h1>
+  <div class="actions">
+    <button id="btn-md">&#8595; Baixar .MD</button>
+    <button id="btn-pdf">&#8595; Exportar PDF</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+     BARRA DE FERRAMENTAS
+═══════════════════════════════════════════════ -->
+<div class="toolbar">
+
+  <!-- Formatação inline -->
+  <button data-action="bold"><b>B</b></button>
+  <button data-action="italic"><i>I</i></button>
+  <button data-action="underline"><u>U</u></button>
+  <button data-action="strike"><s>S</s></button>
+  <div class="toolbar-sep"></div>
+
+  <!-- Títulos -->
+  <button data-action="h1">H1</button>
+  <button data-action="h2">H2</button>
+  <button data-action="h3">H3</button>
+  <div class="toolbar-sep"></div>
+
+  <!-- Listas, citação e código -->
+  <button data-action="ul">Lista</button>
+  <button data-action="ol">Num.</button>
+  <button data-action="quote">> Cit.</button>
+  <button data-action="inline-code">` code `</button>
+  <button data-action="code-block">``` Bloco</button>
+  <div class="toolbar-sep"></div>
+
+  <!-- Inserções -->
+  <button data-action="link">&#128279; Link</button>
+  <button data-action="image">&#128247; Img</button>
+  <button data-action="table">Tabela</button>
+  <button data-action="hr">&#8213; HR</button>
+  <div class="toolbar-sep"></div>
+
+  <!-- Cores fixas -->
+  <button data-action="fontVermelho" style="color:#dc2626;">A Verm.</button>
+  <button data-action="fundoAmarelo" style="background:#fef08a;color:#713f12;">&#9612; Mark</button>
+  <div class="toolbar-sep"></div>
+
+  <!-- Seletor de cor personalizada (1 clique aplica, 2 cliques abre picker) -->
+  <button class="btn-cor" id="btnCor" title="1 clique: aplica cor | 2 cliques: muda a cor">
+    <span class="cor-swatch" id="corSwatch"></span>
+    &#127912; Cor
+    <input type="color" id="fontColorInput" value="#2563eb">
+  </button>
+  <div class="toolbar-sep"></div>
+
+  <!-- Toggle de sincronização de scroll -->
+  <button id="btn-sync" title="Sincronizar scroll editor/preview">&#8597; Sync</button>
+</div>
+
+<!-- Input de arquivo oculto para importar imagens -->
+<input type="file" id="imageFileInput" accept="image/*">
+
+<!-- ═══════════════════════════════════════════════
+     ÁREA PRINCIPAL: editor | resizer | preview
+═══════════════════════════════════════════════ -->
+<main>
+  <section class="pane" id="editorPane" style="width:50%">
+    <div class="pane-header">Markdown</div>
+    <textarea id="markdown-input" spellcheck="false" placeholder="Digite seu Markdown aqui..."></textarea>
+  </section>
+
+  <div class="resizer" id="resizer"></div>
+
+  <section class="pane" style="flex:1">
+    <div class="pane-header">Pr&#233;-visualiza&#231;&#227;o</div>
+    <div id="preview"></div>
+  </section>
+</main>
+
+<!-- ═══════════════════════════════════════════════
+     MODAL: inserir hyperlink
+═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="linkModal">
+  <div class="modal">
+    <h3>&#128279; Inserir Hiperlink</h3>
+    <label>Texto do link</label>
+    <input id="linkText" type="text" placeholder="Texto vis&#237;vel">
+    <label>URL</label>
+    <input id="linkUrl" type="url" placeholder="https://exemplo.com">
+    <div class="modal-actions">
+      <button class="btn-cancel" id="linkCancel">Cancelar</button>
+      <button id="linkConfirm">Inserir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  /* ──────────────────────────────────────────────
+     1. REFERÊNCIAS AO DOM
+  ────────────────────────────────────────────── */
+  var textarea       = document.getElementById('markdown-input');
+  var preview        = document.getElementById('preview');
+  var editorPane     = document.getElementById('editorPane');
+  var resizerEl      = document.getElementById('resizer');
+  var mainEl         = document.querySelector('main');
+  var btnSync        = document.getElementById('btn-sync');
+  var btnCor         = document.getElementById('btnCor');
+  var corSwatch      = document.getElementById('corSwatch');
+  var fontColorInput = document.getElementById('fontColorInput');
+  var imageFileInput = document.getElementById('imageFileInput');
+
+  /* ──────────────────────────────────────────────
+     2. ESTADO CENTRALIZADO DO EDITOR
+        Único objeto que guarda scroll + cursor.
+        Atualizado automaticamente por capturarEstado()
+        a cada interação do usuário no textarea.
+  ────────────────────────────────────────────── */
+  var editorState = {
+    scrollEditor  : 0,
+    scrollPreview : 0,
+    cursorStart   : 0,
+    cursorEnd     : 0
+  };
+
+  /**
+   * Lê o DOM e atualiza editorState.
+   * Chamada pelos listeners de mouse, teclado, touch e scroll.
+   */
+  function capturarEstado() {
+    editorState.scrollEditor  = textarea.scrollTop;
+    editorState.scrollPreview = preview.scrollTop;
+    editorState.cursorStart   = textarea.selectionStart;
+    editorState.cursorEnd     = textarea.selectionEnd;
+
+    //console.log(editorState.scrollEditor);
+  }
+
+  // Teclado: navegação por setas, Home, End, etc.
+  textarea.addEventListener('keyup',    capturarEstado);
+  // Mouse: clique simples
+  textarea.addEventListener('click',    capturarEstado);
+  // Mouse: fim de arrasto (seleção com shift+click ou drag)
+  textarea.addEventListener('mouseup',  capturarEstado);
+  // Touch: equivalente ao mouseup em dispositivos móveis
+  textarea.addEventListener('touchend', capturarEstado);
+  // Scroll manual do textarea (não muda cursor, mas muda scrollTop)
+  textarea.addEventListener('scroll',   capturarEstado);
+
+  /* ──────────────────────────────────────────────
+     3. CONFIGURAÇÃO DO MARKED + HIGHLIGHT.JS
+        Renderer customizado para blocos de código:
+        adiciona data-lang no <pre> (usado no ::before do CSS)
+        e aplica highlight.js na colorização.
+  ────────────────────────────────────────────── */
+  var renderer = new marked.Renderer();
+
+  renderer.code = function (code, language) {
+    var lang      = (language || '').split(/\s/)[0];
+    var validLang = lang && hljs.getLanguage(lang) ? lang : null;
+    var highlighted;
+
+    try {
+      highlighted = validLang
+        ? hljs.highlight(code, { language: validLang }).value
+        : hljs.highlightAuto(code).value;
+    } catch (e) {
+      highlighted = code
+        .replace(/&/g, '&')
+        .replace(/</g, '<')
+        .replace(/>/g, '>');
+    }
+
+    var label = lang || 'code';
+    return '<pre data-lang="' + label + '"><code class="hljs">' + highlighted + '</code></pre>';
+  };
+
+  marked.setOptions({
+    renderer  : renderer,
+    breaks    : true,
+    gfm       : true,
+    headerIds : false,
+    mangle    : false
+  });
+
+  /* ──────────────────────────────────────────────
+     4. RENDERIZAÇÃO
+        Chama capturarEstado() para garantir um
+        snapshot fresco, renderiza o Markdown e
+        restaura scroll + cursor a partir de
+        editorState (o reflow do innerHTML pode
+        deslocar ambos).
+  ────────────────────────────────────────────── */
+  function atualizarPreview() {
+    //capturarEstado(); // garante snapshot atualizado antes de qualquer mudança
+
+    try {
+      preview.innerHTML = marked.parse(textarea.value);
+    } catch (e) {
+      preview.innerHTML = '<p style="color:red">Erro ao renderizar: ' + e.message + '</p>';
+    }
+
+    // Restaura o que o reflow pode ter deslocado
+    textarea.scrollTop      = editorState.scrollEditor;
+    preview.scrollTop       = editorState.scrollPreview;
+    textarea.selectionStart = editorState.cursorStart;
+    textarea.selectionEnd   = editorState.cursorEnd;
+    textarea.focus();
+  }
+
+  // Re-renderiza a cada keystroke
+  textarea.addEventListener('input', atualizarPreview);
+
+  /* ──────────────────────────────────────────────
+     5. HELPERS DE EDIÇÃO
+        getSel()       → snapshot de seleção atual
+        aplicarValor() → aplica novo valor sem perder scroll/cursor
+        setCursor()    → move o cursor para uma posição
+        wrap()         → envolve seleção com marcadores (com toggle)
+        insert()       → insere texto cru na posição do cursor
+        linePrefix()   → adiciona/remove prefixo em cada linha selecionada
+  ────────────────────────────────────────────── */
+
+  /** Retorna {start, end, text, value} do estado atual do textarea */
+  function getSel() {
+    return {
+      start : textarea.selectionStart,
+      end   : textarea.selectionEnd,
+      text  : textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
+      value : textarea.value
+    };
+  }
+
+  /**
+   * Aplica novoValor no textarea preservando o scroll via editorState,
+   * depois posiciona o cursor em [novoStart, novoEnd] e
+   * mantém editorState sincronizado com as novas posições.
+   */
+  function aplicarValor(novoValor, novoStart, novoEnd) {
+    capturarEstado(); // garante snapshot atualizado antes de qualquer mudança
+    textarea.value     = novoValor;                  // browser reseta scrollTop aqui
+    textarea.scrollTop = editorState.scrollEditor;   // restaura imediatamente do estado salvo
+    textarea.focus();
+    textarea.selectionStart = novoStart;
+    textarea.selectionEnd   = novoEnd;
+
+    // Atualiza o estado com as novas posições de cursor
+    editorState.cursorStart = novoStart;
+    editorState.cursorEnd   = novoEnd;
+
+    textarea.focus();
+    atualizarPreview();
+  }
+
+  /** Move o cursor sem alterar o valor */
+  function setCursor(pos) {
+    textarea.focus();
+    textarea.selectionStart = textarea.selectionEnd = pos;
+  }
+
+  /**
+   * Envolve o texto selecionado com open/close.
+   * Se já estiver envolvido, remove (toggle).
+   * Se não houver seleção, insere os marcadores e posiciona o cursor entre eles.
+   */
+  function wrap(open, close) {
+    var sel = getSel();
+    var s = sel.start, e = sel.end, t = sel.text, v = sel.value;
+
+    if (!t) {
+      aplicarValor(
+        v.slice(0, s) + open + close + v.slice(e),
+        s + open.length,
+        s + open.length
+      );
+      return;
+    }
+
+    var before = v.slice(s - open.length, s);
+    var after  = v.slice(e, e + close.length);
+
+    if (before === open && after === close) {
+      // Toggle off: remove os marcadores existentes
+      aplicarValor(
+        v.slice(0, s - open.length) + t + v.slice(e + close.length),
+        s - open.length,
+        e - open.length
+      );
+    } else {
+      // Toggle on: aplica os marcadores
+      aplicarValor(
+        v.slice(0, s) + open + t + close + v.slice(e),
+        s + open.length,
+        e + open.length
+      );
+    }
+  }
+
+  /** Insere texto bruto na posição atual do cursor */
+  function insert(txt) {
+    var sel = getSel();
+    aplicarValor(
+      sel.value.slice(0, sel.start) + txt + sel.value.slice(sel.end),
+      sel.start + txt.length,
+      sel.start + txt.length
+    );
+  }
+
+  /**
+   * Adiciona/remove prefix no início de cada linha dentro da seleção (toggle).
+   * Usado para listas, cabeçalhos, citações, etc.
+   */
+  function linePrefix(prefix) {
+    var sel = getSel();
+    var s = sel.start, e = sel.end, v = sel.value;
+
+    var ls = v.lastIndexOf('\n', s - 1) + 1;
+    var le = v.indexOf('\n', e);
+    var re = le === -1 ? v.length : le;
+
+    var block   = v.slice(ls, re);
+    var lines   = block.split('\n');
+    var allHave = lines.every(function (l) { return l.indexOf(prefix) === 0; });
+
+    var newBlock = allHave
+      ? lines.map(function (l) { return l.slice(prefix.length); }).join('\n')
+      : lines.map(function (l) { return l.indexOf(prefix) === 0 ? l : prefix + l; }).join('\n');
+
+    var delta = newBlock.length - block.length;
+
+    aplicarValor(
+      v.slice(0, ls) + newBlock + v.slice(re),
+      s + (allHave ? -prefix.length : prefix.length),
+      e + delta
+    );
+  }
+
+  /* ──────────────────────────────────────────────
+     6. BARRA DE FERRAMENTAS
+        Event delegation no container .toolbar.
+  ────────────────────────────────────────────── */
+  document.querySelector('.toolbar').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+    var sel, content, block;
+
+    switch (action) {
+      case 'bold':        wrap('**', '**');        break;
+      case 'italic':      wrap('*', '*');          break;
+      case 'underline':   wrap('<u>', '</u>');     break;
+      case 'strike':      wrap('~~', '~~');        break;
+
+      case 'h1': linePrefix('# ');   break;
+      case 'h2': linePrefix('## ');  break;
+      case 'h3': linePrefix('### '); break;
+
+      case 'ul':    linePrefix('- ');  break;
+      case 'ol':    linePrefix('1. '); break;
+      case 'quote': linePrefix('> ');  break;
+
+      case 'inline-code': wrap('`', '`'); break;
+      case 'code-block':
+        sel     = getSel();
+        content = sel.text || '// seu codigo aqui';
+        block   = '```js\n' + content + '\n```\n';
+        aplicarValor(
+          sel.value.slice(0, sel.start) + block + sel.value.slice(sel.end),
+          sel.start + 4,
+          sel.start + 4 + content.length
+        );
+        break;
+
+      case 'hr':
+        insert('\n---\n');
+        break;
+      case 'table':
+        insert('\n| Coluna 1 | Coluna 2 | Coluna 3 |\n|----------|----------|----------|\n| Valor 1  | Valor 2  | Valor 3  |\n');
+        break;
+      case 'image': imageFileInput.click(); break;
+      case 'link':  openLinkModal();        break;
+
+      case 'fontVermelho': wrap('<span style="color:red">',               '</span>'); break;
+      case 'fundoAmarelo': wrap('<span style="background-color:yellow">', '</span>'); break;
+    }
+  });
+
+  /* ──────────────────────────────────────────────
+     7. ATALHOS DE TECLADO
+  ────────────────────────────────────────────── */
+  textarea.addEventListener('keydown', function (e) {
+    var ctrl = e.ctrlKey || e.metaKey;
+
+    if (ctrl && e.key === 'b') { e.preventDefault(); wrap('**', '**'); }
+    if (ctrl && e.key === 'i') { e.preventDefault(); wrap('*', '*');   }
+    if (ctrl && e.key === 'd') { e.preventDefault(); wrap('~~', '~~'); }
+    if (ctrl && e.key === 'k') { e.preventDefault(); openLinkModal();  }
+
+    if (e.key === 'Tab') { e.preventDefault(); insert('  '); }
+  });
+
+  /* ──────────────────────────────────────────────
+     8. SELETOR DE COR PERSONALIZADA
+        1 clique  → aplica corAtual como span inline
+        2 cliques → abre o color picker nativo
+  ────────────────────────────────────────────── */
+  var corAtual   = '#2563eb';
+  var clickTimer = null;
+
+  corSwatch.style.background = corAtual;
+
+  btnCor.addEventListener('click', function (e) {
+    if (e.target === fontColorInput) return;
+    e.stopPropagation();
+
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+      fontColorInput.click();
+    } else {
+      clickTimer = setTimeout(function () {
+        clickTimer = null;
+        wrap('<span style="color:' + corAtual + '">', '</span>');
+      }, 280);
+    }
+  });
+
+  fontColorInput.addEventListener('change', function () {
+    corAtual = this.value;
+    corSwatch.style.background = corAtual;
+    wrap('<span style="color:' + corAtual + '">', '</span>');
+  });
+
+  /* ──────────────────────────────────────────────
+     9. INSERÇÃO DE IMAGEM POR ARQUIVO
+  ────────────────────────────────────────────── */
+  imageFileInput.addEventListener('change', function () {
+    var file = this.files[0];
+    if (!file) return;
+
+    var blobUrl = URL.createObjectURL(file);
+    var nome    = file.name.replace(/[|$$|$|()]/g, '');
+
+    insert('![' + nome + '](' + blobUrl + ')');
+    this.value = '';
+  });
+
+  /* ──────────────────────────────────────────────
+     10. REDIMENSIONADOR DE PAINÉIS
+  ────────────────────────────────────────────── */
+  var isResizing = false;
+
+  resizerEl.addEventListener('mousedown', function () {
+    isResizing = true;
+    resizerEl.classList.add('active');
+    document.body.style.cursor     = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', function (e) {
+    if (!isResizing) return;
+    var rect = mainEl.getBoundingClientRect();
+    var pct  = ((e.clientX - rect.left) / rect.width) * 100;
+    editorPane.style.width = Math.max(15, Math.min(85, pct)) + '%';
+  });
+
+  document.addEventListener('mouseup', function () {
+    if (!isResizing) return;
+    isResizing = false;
+    resizerEl.classList.remove('active');
+    document.body.style.cursor     = '';
+    document.body.style.userSelect = '';
+  });
+
+  /* ──────────────────────────────────────────────
+     11. SINCRONIZAÇÃO DE SCROLL
+  ────────────────────────────────────────────── */
+  var syncAtivo    = true;
+  var previewLivre = false;
+  var timerLiberar = null;
+
+  preview.addEventListener('mousedown', function () {
+    previewLivre = true;
+    clearTimeout(timerLiberar);
+  });
+
+  preview.addEventListener('mouseup', function () {
+    clearTimeout(timerLiberar);
+    timerLiberar = setTimeout(function () { previewLivre = false; }, 2000);
+  });
+
+  // O listener de scroll do textarea agora chama capturarEstado()
+  // antes de sincronizar, garantindo que editorState.scrollEditor
+  // esteja sempre atualizado.
+  textarea.addEventListener('scroll', function () {
+    capturarEstado(); // já registrado acima, mas explícito aqui para o sync
+    if (!syncAtivo || previewLivre) return;
+    var ratio = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight || 1);
+    preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
+  });
+
+  btnSync.addEventListener('click', function () {
+    syncAtivo    = !syncAtivo;
+    previewLivre = false;
+    clearTimeout(timerLiberar);
+    btnSync.textContent = syncAtivo ? '\u2195 Sync' : '\u2195 Livre';
+    btnSync.classList.toggle('off', !syncAtivo);
+  });
+
+  /* ──────────────────────────────────────────────
+     12. MODAL DE HYPERLINK
+  ────────────────────────────────────────────── */
+  var savedStart, savedEnd;
+
+  function openLinkModal() {
+    var sel    = getSel();
+    savedStart = sel.start;
+    savedEnd   = sel.end;
+
+    document.getElementById('linkText').value = sel.text || '';
+    document.getElementById('linkUrl').value  = '';
+    document.getElementById('linkModal').classList.add('open');
+
+    setTimeout(function () {
+      (sel.text
+        ? document.getElementById('linkUrl')
+        : document.getElementById('linkText')
+      ).focus();
+    }, 50);
+  }
+
+  function closeLinkModal() {
+    document.getElementById('linkModal').classList.remove('open');
+    textarea.focus();
+  }
+
+  document.getElementById('linkCancel').addEventListener('click', closeLinkModal);
+
+  document.getElementById('linkConfirm').addEventListener('click', function () {
+    var text = document.getElementById('linkText').value.trim() || 'link';
+    var url  = document.getElementById('linkUrl').value.trim()  || '#';
+    var md   = '[' + text + '](' + url + ')';
+    var v    = textarea.value;
+
+    aplicarValor(
+      v.slice(0, savedStart) + md + v.slice(savedEnd),
+      savedStart + md.length,
+      savedStart + md.length
+    );
+    closeLinkModal();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeLinkModal();
+  });
+
+  /* ──────────────────────────────────────────────
+     13. EXPORTAR PDF
+         CSS do hljs embutido diretamente a partir
+         das classes reais do github-dark.min.css
+         para garantir fidelidade na impressão.
+  ────────────────────────────────────────────── */
+  document.getElementById('btn-pdf').addEventListener('click', function () {
+    var conteudo = preview.innerHTML;
+    var win = window.open('', '_blank', 'width=960,height=720');
+    if (!win) { alert('Permita pop-ups para exportar o PDF.'); return; }
+
+    var html = [
+      '<!DOCTYPE html>',
+      '<html lang="pt-BR"><head><meta charset="UTF-8"><title>documento</title>',
+      '<style>',
+      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}',
+      'body{font-family:"Segoe UI",Georgia,serif;font-size:13px;line-height:1.8;color:#1e293b;background:#fff;padding:36px 52px;max-width:860px;margin:0 auto}',
+      'h1{font-size:2em;font-weight:700;color:#111827;border-bottom:2px solid #e5e7eb;padding-bottom:.3em;margin:1.2em 0 .5em}',
+      'h2{font-size:1.5em;font-weight:700;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:.2em;margin:1em 0 .4em}',
+      'h3{font-size:1.2em;font-weight:700;color:#111827;margin:.9em 0 .3em}',
+      'h4,h5,h6{font-weight:700;color:#1e293b;margin:.8em 0 .3em}',
+      'p{margin:.5em 0} a{color:#4f46e5}',
+      'strong{font-weight:700} em{font-style:italic}',
+      'del{text-decoration:line-through;color:#9ca3af} u{text-decoration:underline}',
+      'ul,ol{padding-left:1.5em;margin:.4em 0} li{margin:.25em 0}',
+      'hr{border:none;border-top:1px solid #e5e7eb;margin:1.2em 0}',
+      'blockquote{border-left:4px solid #a5b4fc;margin:.8em 0;padding:.4em 1em;background:#f5f3ff;color:#4b5563;border-radius:0 4px 4px 0}',
+      'code{background:#1e1e2e;color:#a5d6ff;padding:2px 5px;border-radius:3px;font-family:"Fira Code",Consolas,monospace;font-size:.84em}',
+      'pre{background:#0d1117;border:1px solid #30363d;border-radius:6px;margin:1em 0;overflow:hidden;page-break-inside:avoid}',
+      'pre::before{content:attr(data-lang);display:block;background:#161b22;color:#8b949e;font-size:.68rem;font-family:Consolas,monospace;padding:3px 12px;border-bottom:1px solid #30363d;text-transform:uppercase;letter-spacing:.05em}',
+      'pre code{display:block;background:none;color:#c9d1d9;padding:12px 16px;font-size:.82em;line-height:1.6;white-space:pre-wrap;word-break:break-all}',
+      /* ── Tokens do github-dark copiados diretamente do CDN ── */
+      '.hljs{color:#c9d1d9;background:#0d1117}',
+      '.hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}',
+      '.hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}',
+      '.hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id,.hljs-variable{color:#79c0ff}',
+      '.hljs-meta .hljs-string,.hljs-regexp,.hljs-string{color:#a5d6ff}',
+      '.hljs-built_in,.hljs-symbol{color:#ffa657}',
+      '.hljs-code,.hljs-comment,.hljs-formula{color:#8b949e}',
+      '.hljs-name,.hljs-quote,.hljs-selector-pseudo,.hljs-selector-tag{color:#7ee787}',
+      '.hljs-subst{color:#c9d1d9}',
+      '.hljs-section{color:#1f6feb;font-weight:700}',
+      '.hljs-bullet{color:#f2cc60}',
+      '.hljs-emphasis{color:#c9d1d9;font-style:italic}',
+      '.hljs-strong{color:#c9d1d9;font-weight:700}',
+      '.hljs-addition{color:#aff5b4;background-color:#033a16}',
+      '.hljs-deletion{color:#ffdcd7;background-color:#67060c}',
+      /* ─────────────────────────────────────────────────────── */
+      'table{border-collapse:collapse;width:100%;margin:.8em 0;font-size:.9em}',
+      'th{background:#f3f4f6;font-weight:600;color:#111827;border:1px solid #e5e7eb;padding:7px 12px;text-align:left}',
+      'td{border:1px solid #e5e7eb;padding:7px 12px;color:#1e293b}',
+      'tr:nth-child(even) td{background:#f9fafb}',
+      'img{max-width:100%;border-radius:4px;margin:.4em 0}',
+      '@media print{body{padding:0}pre,table,blockquote{page-break-inside:avoid}h1,h2,h3{page-break-after:avoid}}',
+      '</style></head>',
+      '<body>' + conteudo + '</body></html>'
+    ].join('\n');
+
+    win.document.write(html);
+    win.document.close();
+    win.onload = function () {
+      setTimeout(function () { win.focus(); win.print(); win.close(); }, 400);
+    };
+  });
+
+  /* ──────────────────────────────────────────────
+     14. EXPORTAR .MD
+  ────────────────────────────────────────────── */
+  document.getElementById('btn-md').addEventListener('click', function () {
+    var blob = new Blob([textarea.value], { type: 'text/markdown;charset=utf-8' });
+    var a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = 'documento.md';
+    a.click();
+  });
+
+  /* ──────────────────────────────────────────────
+     15. CONTEÚDO INICIAL DE EXEMPLO
+  ────────────────────────────────────────────── */
+  textarea.value = [
+    '# Titulo do Documento',
+    '',
+    'Escreva seu **Markdown** aqui.',
+    '',
+    '## Codigo com Highlight',
+    '',
+    '```javascript',
+    'function saudacao(nome) {',
+    '  const msg = "Ola, " + nome + "!";',
+    '  console.log(msg);',
+    '  return msg;',
+    '}',
+    '```',
+    '',
+    '```sql',
+    'SELECT IdNFSe, ChaveAcessoNFSe, IdStatus',
+    'FROM NFSe_Emissoes',
+    'WHERE IdStatus IN (0, 10, 70)',
+    'ORDER BY DtInclusao DESC',
+    '```',
+    '',
+    '## Formatacao',
+    '',
+    '- **Negrito** — *Italico* — ~~Tachado~~ — <u>Sublinhado</u>',
+    '- `codigo inline`',
+    '- [Links](https://exemplo.com)',
+    '',
+    '## Tabela',
+    '',
+    '| Acao    | Atalho   |',
+    '|---------|----------|',
+    '| Negrito | Ctrl + B |',
+    '| Italico | Ctrl + I |',
+    '| Tachado | Ctrl + D |',
+    '| Link    | Ctrl + K |',
+    '',
+    '> Dica: clicar em formatacao ja aplicada **remove** o efeito.',
+  ].join('\n');
+  capturarEstado(); // garante snapshot atualizado antes de qualquer mudança
+  atualizarPreview();
+
+})();
+</script>
+</body>
+</html>
