@@ -5,10 +5,8 @@
   <title>Editor Markdown → PDF + .MD</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Renderizador Markdown -->
   <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
 
-  <!-- Highlight.js: tema + core + linguagens adicionais -->
   <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
@@ -18,14 +16,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
 
-  <!-- ═══════════════════════════════════════════════
-       ESTILOS GLOBAIS
-  ═══════════════════════════════════════════════ -->
   <style>
-    /* ── Reset básico ── */
     * { box-sizing: border-box; }
 
-    /* ── Layout raiz: coluna, ocupa 100vh ── */
     body {
       margin: 0;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -37,20 +30,63 @@
       overflow: hidden;
     }
 
-    /* ── Cabeçalho com título e botões de exportação ── */
     header {
-      padding: 8px 16px;
+      padding: 6px 12px;
       background: #111827;
       color: #f9fafb;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-shrink: 0;
+      gap: 10px;
+      flex-wrap: wrap;
     }
-    header h1 { font-size: 1rem; margin: 0; }
-    header .actions { display: flex; gap: 8px; }
 
-    /* ── Botão padrão ── */
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    header h1 {
+      font-size: 0.9rem;
+      margin: 0;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ── Campo de nome do arquivo ── */
+    #fileNameInput {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      color: #f9fafb;
+      font-size: 0.82rem;
+      padding: 4px 8px;
+      width: 220px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #fileNameInput:focus { border-color: #4f46e5; }
+    #fileNameInput::placeholder { color: #6b7280; }
+
+    /* Badge de arquivo aberto */
+    #fileOpenBadge {
+      font-size: 0.72rem;
+      background: #065f46;
+      color: #d1fae5;
+      border: 1px solid #059669;
+      border-radius: 10px;
+      padding: 2px 8px;
+      white-space: nowrap;
+      display: none;
+    }
+    #fileOpenBadge.visible { display: inline-block; }
+
+    header .actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+
     button {
       border: none;
       border-radius: 4px;
@@ -63,7 +99,23 @@
     }
     button:hover { background: #4338ca; }
 
-    /* ── Barra de ferramentas ── */
+    /* Botão Salvar */
+    #btn-save {
+      background: #059669;
+    }
+    #btn-save:hover { background: #047857; }
+    #btn-save:disabled {
+      background: #374151;
+      color: #6b7280;
+      cursor: not-allowed;
+    }
+
+    /* Botão Abrir */
+    #btn-open {
+      background: #d97706;
+    }
+    #btn-open:hover { background: #b45309; }
+
     .toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -82,7 +134,6 @@
     }
     .toolbar button:hover { background: #d1d5db; }
 
-    /* Separador visual entre grupos de botões */
     .toolbar-sep {
       width: 1px;
       height: 22px;
@@ -90,7 +141,35 @@
       margin: 0 2px;
     }
 
-    /* ── Botão seletor de cor (com swatch e input[color] oculto) ── */
+    /* ── Auto-save checkbox ── */
+    .autosave-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.78rem;
+      color: #374151;
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #e5e7eb;
+      border: 1px solid #d1d5db;
+      transition: background 0.15s;
+    }
+    .autosave-wrap:hover { background: #d1d5db; }
+    .autosave-wrap input[type="checkbox"] {
+      margin: 0;
+      cursor: pointer;
+      accent-color: #4f46e5;
+    }
+    /* Countdown do auto-save */
+    #autoSaveCountdown {
+      font-size: 0.72rem;
+      color: #6b7280;
+      margin-left: 2px;
+    }
+    #autoSaveCountdown.ativo { color: #059669; font-weight: 600; }
+
     .btn-cor {
       display: inline-flex;
       align-items: center;
@@ -113,7 +192,6 @@
       background: #2563eb;
       flex-shrink: 0;
     }
-    /* O input[type=color] fica invisível; abrimos via .click() */
     #fontColorInput {
       position: absolute;
       width: 0; height: 0;
@@ -121,7 +199,6 @@
       pointer-events: none;
     }
 
-    /* ── Botão de sincronização de scroll ── */
     #btn-sync {
       font-size: 0.78rem;
       padding: 3px 9px;
@@ -130,11 +207,24 @@
       border: 1px solid #6ee7b7;
     }
     #btn-sync:hover { background: #a7f3d0; }
-    /* Estado desligado */
     #btn-sync.off { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
     #btn-sync.off:hover { background: #fecaca; }
 
-    /* ── Área principal: editor + resizer + preview lado a lado ── */
+    /* ── Barra de status (faixa fina abaixo da toolbar) ── */
+    #statusBar {
+      padding: 2px 12px;
+      background: #1f2937;
+      color: #9ca3af;
+      font-size: 0.7rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      min-height: 20px;
+    }
+    #statusBar .status-msg { color: #34d399; }
+    #statusBar .status-msg.erro { color: #f87171; }
+
     main {
       flex: 1;
       display: flex;
@@ -157,7 +247,6 @@
       flex-shrink: 0;
     }
 
-    /* Divisor arrastável entre os painéis */
     .resizer {
       width: 5px;
       background: #d1d5db;
@@ -167,7 +256,6 @@
     }
     .resizer:hover, .resizer.active { background: #4f46e5; }
 
-    /* ── Textarea do editor (tema escuro tipo IDE) ── */
     textarea {
       flex: 1; width: 100%; padding: 12px;
       border: none; resize: none; outline: none;
@@ -177,14 +265,12 @@
       overflow-y: auto;
     }
 
-    /* ── Painel de pré-visualização ── */
     #preview {
       flex: 1; padding: 20px 24px;
       overflow-y: auto; background: white;
       font-size: 0.95rem; line-height: 1.8;
     }
 
-    /* Tipografia da preview */
     #preview h1, #preview h2, #preview h3 {
       border-bottom: 1px solid #e5e7eb;
       padding-bottom: 4px; margin-top: 1.2em; color: #111827;
@@ -198,22 +284,16 @@
     #preview strong { color: #111827; }
     #preview em     { color: #374151; }
     #preview del    { color: #9ca3af; text-decoration: line-through; }
-
-    /* Citação */
     #preview blockquote {
       border-left: 4px solid #a5b4fc; margin: 0.8em 0;
       padding: 0.4em 1em; background: #f5f3ff;
       color: #4b5563; border-radius: 0 4px 4px 0;
     }
-
-    /* Código inline */
     #preview code {
       background: #1e1e2e; color: #a5d6ff;
       padding: 2px 6px; border-radius: 3px; font-size: 0.85em;
       font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
     }
-
-    /* Bloco de código com label da linguagem via ::before */
     #preview pre {
       background: #0d1117; border: 1px solid #30363d;
       border-radius: 6px; margin: 1em 0; padding: 0; overflow-x: auto;
@@ -229,15 +309,12 @@
       display: block; background: none; color: #c9d1d9;
       padding: 12px 16px; font-size: 0.85em; line-height: 1.6; border-radius: 0;
     }
-
-    /* Tabela */
     #preview table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
     #preview th, #preview td { border: 1px solid #e5e7eb; padding: 7px 12px; text-align: left; }
     #preview th { background: #f3f4f6; font-weight: 600; }
     #preview tr:nth-child(even) td { background: #f9fafb; }
     #preview img { max-width: 100%; border-radius: 4px; }
 
-    /* ── Modal de inserção de hyperlink ── */
     .modal-overlay {
       display: none; position: fixed; inset: 0;
       background: #00000070; z-index: 200;
@@ -258,46 +335,70 @@
       font-size: 0.88rem; margin-bottom: 12px; outline: none;
     }
     .modal input:focus { border-color: #4f46e5; }
-    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 12px; /* Espaçamento para o novo botão */
+    }
     .btn-cancel { background: #f3f4f6; color: #374151; }
     .btn-cancel:hover { background: #e5e7eb; }
 
-    /* Input de arquivo de imagem completamente oculto */
-    #imageFileInput { display: none; }
+    /* Estilo para o novo botão de carregar imagem local */
+    #btnLocalImage {
+      background: #10b981; /* Cor verde para indicar "carregar" */
+      color: white;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-right: auto; /* Empurra os outros botões para a direita */
+    }
+    #btnLocalImage:hover { background: #059669; }
+
+    /* Apenas o input de abrir MD é necessário agora */
+    #openMdFileInput { display: none; }
+    #localImageFileInput { display: none; } /* Input oculto para selecionar arquivo local */
   </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════
-     CABEÇALHO
-═══════════════════════════════════════════════ -->
+<!-- CABEÇALHO -->
 <header>
-  <h1>Editor Markdown &#8594; PDF + .MD</h1>
+  <div class="header-left">
+    <h1>&#9998; MD Editor</h1>
+    <input
+      type="text"
+      id="fileNameInput"
+      placeholder="nome-do-arquivo"
+      title="Nome base para exportar .md e .pdf (sem extensão)"
+      value="documento"
+    />
+    <span id="fileOpenBadge">&#128196; <span id="fileOpenName"></span></span>
+  </div>
   <div class="actions">
-    <button id="btn-md">&#8595; Baixar .MD</button>
-    <button id="btn-pdf">&#8595; Exportar PDF</button>
+    <button id="btn-open"  title="Abrir arquivo .md do computador">&#128194; Abrir .MD</button>
+    <button id="btn-save"  title="Salvar sobre o arquivo aberto" disabled>&#128190; Salvar</button>
+    <button id="btn-md"   >&#8595; Baixar .MD</button>
+    <button id="btn-pdf"  >&#8595; Exportar PDF</button>
   </div>
 </header>
 
-<!-- ═══════════════════════════════════════════════
-     BARRA DE FERRAMENTAS
-═══════════════════════════════════════════════ -->
+<!-- BARRA DE FERRAMENTAS -->
 <div class="toolbar">
-
-  <!-- Formatação inline -->
   <button data-action="bold"><b>B</b></button>
   <button data-action="italic"><i>I</i></button>
   <button data-action="underline"><u>U</u></button>
   <button data-action="strike"><s>S</s></button>
   <div class="toolbar-sep"></div>
 
-  <!-- Títulos -->
   <button data-action="h1">H1</button>
   <button data-action="h2">H2</button>
   <button data-action="h3">H3</button>
   <div class="toolbar-sep"></div>
 
-  <!-- Listas, citação e código -->
   <button data-action="ul">Lista</button>
   <button data-action="ol">Num.</button>
   <button data-action="quote">> Cit.</button>
@@ -305,19 +406,16 @@
   <button data-action="code-block">``` Bloco</button>
   <div class="toolbar-sep"></div>
 
-  <!-- Inserções -->
   <button data-action="link">&#128279; Link</button>
   <button data-action="image">&#128247; Img</button>
   <button data-action="table">Tabela</button>
   <button data-action="hr">&#8213; HR</button>
   <div class="toolbar-sep"></div>
 
-  <!-- Cores fixas -->
   <button data-action="fontVermelho" style="color:#dc2626;">A Verm.</button>
   <button data-action="fundoAmarelo" style="background:#fef08a;color:#713f12;">&#9612; Mark</button>
   <div class="toolbar-sep"></div>
 
-  <!-- Seletor de cor personalizada (1 clique aplica, 2 cliques abre picker) -->
   <button class="btn-cor" id="btnCor" title="1 clique: aplica cor | 2 cliques: muda a cor">
     <span class="cor-swatch" id="corSwatch"></span>
     &#127912; Cor
@@ -325,16 +423,28 @@
   </button>
   <div class="toolbar-sep"></div>
 
-  <!-- Toggle de sincronização de scroll -->
   <button id="btn-sync" title="Sincronizar scroll editor/preview">&#8597; Sync</button>
+  <div class="toolbar-sep"></div>
+
+  <!-- Auto-save -->
+  <label class="autosave-wrap" title="Salva automaticamente o arquivo aberto a cada 5 minutos">
+    <input type="checkbox" id="chkAutoSave" />
+    &#9203; Auto-save
+    <span id="autoSaveCountdown"></span>
+  </label>
 </div>
 
-<!-- Input de arquivo oculto para importar imagens -->
-<input type="file" id="imageFileInput" accept="image/*">
+<!-- Barra de status -->
+<div id="statusBar">
+  <span id="statusLeft">Pronto</span>
+  <span id="statusRight"></span>
+</div>
 
-<!-- ═══════════════════════════════════════════════
-     ÁREA PRINCIPAL: editor | resizer | preview
-═══════════════════════════════════════════════ -->
+<!-- Inputs de arquivo ocultos -->
+<input type="file" id="openMdFileInput" accept=".md,text/markdown,text/plain" />
+<input type="file" id="localImageFileInput" accept="image/*" /> 
+
+<!-- ÁREA PRINCIPAL -->
 <main>
   <section class="pane" id="editorPane" style="width:50%">
     <div class="pane-header">Markdown</div>
@@ -344,19 +454,17 @@
   <div class="resizer" id="resizer"></div>
 
   <section class="pane" style="flex:1">
-    <div class="pane-header">Pr&#233;-visualiza&#231;&#227;o</div>
+    <div class="pane-header">Pré-visualização</div>
     <div id="preview"></div>
   </section>
 </main>
 
-<!-- ═══════════════════════════════════════════════
-     MODAL: inserir hyperlink
-═══════════════════════════════════════════════ -->
+<!-- MODAL: inserir hyperlink -->
 <div class="modal-overlay" id="linkModal">
   <div class="modal">
     <h3>&#128279; Inserir Hiperlink</h3>
     <label>Texto do link</label>
-    <input id="linkText" type="text" placeholder="Texto vis&#237;vel">
+    <input id="linkText" type="text" placeholder="Texto visível">
     <label>URL</label>
     <input id="linkUrl" type="url" placeholder="https://exemplo.com">
     <div class="modal-actions">
@@ -366,551 +474,834 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     JAVASCRIPT
-═══════════════════════════════════════════════ -->
+<!-- MODAL: inserir imagem por URL / Local -->
+<div class="modal-overlay" id="imageModal">
+  <div class="modal">
+    <h3>&#128247; Inserir Imagem</h3>
+    <label>URL da Imagem (clique duplo para carregar do PC)</label>
+    <input id="imageUrl" type="url" placeholder="https://exemplo.com/imagem.png ou data:image/png;base64,...">
+    <label>Texto Alternativo (opcional)</label>
+    <input id="imageAltText" type="text" placeholder="Descrição da imagem">
+    <div class="modal-actions">
+      <button id="btnLocalImage" title="Carregar imagem do seu computador (será incorporada no MD)">&#128193; Carregar do PC</button>
+      <button class="btn-cancel" id="imageCancel">Cancelar</button>
+      <button id="imageConfirm">Inserir</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
 
-  /* ──────────────────────────────────────────────
-     1. REFERÊNCIAS AO DOM
-  ────────────────────────────────────────────── */
-  var textarea       = document.getElementById('markdown-input');
-  var preview        = document.getElementById('preview');
-  var editorPane     = document.getElementById('editorPane');
-  var resizerEl      = document.getElementById('resizer');
-  var mainEl         = document.querySelector('main');
-  var btnSync        = document.getElementById('btn-sync');
-  var btnCor         = document.getElementById('btnCor');
-  var corSwatch      = document.getElementById('corSwatch');
-  var fontColorInput = document.getElementById('fontColorInput');
-  var imageFileInput = document.getElementById('imageFileInput');
-
-  /* ──────────────────────────────────────────────
-     2. ESTADO CENTRALIZADO DO EDITOR
-        Único objeto que guarda scroll + cursor.
-        Atualizado automaticamente por capturarEstado()
-        a cada interação do usuário no textarea.
-  ────────────────────────────────────────────── */
-  var editorState = {
-    scrollEditor  : 0,
-    scrollPreview : 0,
-    cursorStart   : 0,
-    cursorEnd     : 0
+  var CONFIG = {
+    corInicial              : '#2563eb',
+    corClickDelay           : 10,
+    syncLiberarDelay        : 1000,
+    resizerMin              : 15,
+    resizerMax              : 85,
+    editorLarguraInicial    : '50%',
+    codeBlockLangPadrao     : 'js',
+    codeBlockPlaceholder    : '// seu codigo aqui',
+    pdfPrintDelay           : 400,
+    autoSaveIntervaloSeg    : 300,   // 5 minutos em segundos
   };
 
-  /**
-   * Lê o DOM e atualiza editorState.
-   * Chamada pelos listeners de mouse, teclado, touch e scroll.
-   */
-  function capturarEstado() {
-    editorState.scrollEditor  = textarea.scrollTop;
-    editorState.scrollPreview = preview.scrollTop;
-    editorState.cursorStart   = textarea.selectionStart;
-    editorState.cursorEnd     = textarea.selectionEnd;
+  var DOM = {
+    textarea         : document.getElementById('markdown-input'),
+    preview          : document.getElementById('preview'),
+    editorPane       : document.getElementById('editorPane'),
+    resizer          : document.getElementById('resizer'),
+    main             : document.querySelector('main'),
+    btnSync          : document.getElementById('btn-sync'),
+    btnCor           : document.getElementById('btnCor'),
+    corSwatch        : document.getElementById('corSwatch'),
+    fontColorInput   : document.getElementById('fontColorInput'),
+    openMdFileInput  : document.getElementById('openMdFileInput'),
+    toolbar          : document.querySelector('.toolbar'),
+    linkModal        : document.getElementById('linkModal'),
+    linkText         : document.getElementById('linkText'),
+    linkUrl          : document.getElementById('linkUrl'),
+    linkConfirm      : document.getElementById('linkConfirm'),
+    linkCancel       : document.getElementById('linkCancel'),
+    // Elementos para o modal de imagem
+    imageModal       : document.getElementById('imageModal'),
+    imageUrl         : document.getElementById('imageUrl'),
+    imageAltText     : document.getElementById('imageAltText'),
+    imageConfirm     : document.getElementById('imageConfirm'),
+    imageCancel      : document.getElementById('imageCancel'),
+    btnLocalImage    : document.getElementById('btnLocalImage'),      
+    localImageFileInput: document.getElementById('localImageFileInput'), 
 
-    //console.log(editorState.scrollEditor);
-  }
-
-  // Teclado: navegação por setas, Home, End, etc.
-  textarea.addEventListener('keyup',    capturarEstado);
-  // Mouse: clique simples
-  textarea.addEventListener('click',    capturarEstado);
-  // Mouse: fim de arrasto (seleção com shift+click ou drag)
-  textarea.addEventListener('mouseup',  capturarEstado);
-  // Touch: equivalente ao mouseup em dispositivos móveis
-  textarea.addEventListener('touchend', capturarEstado);
-  // Scroll manual do textarea (não muda cursor, mas muda scrollTop)
-  textarea.addEventListener('scroll',   capturarEstado);
-
-  /* ──────────────────────────────────────────────
-     3. CONFIGURAÇÃO DO MARKED + HIGHLIGHT.JS
-        Renderer customizado para blocos de código:
-        adiciona data-lang no <pre> (usado no ::before do CSS)
-        e aplica highlight.js na colorização.
-  ────────────────────────────────────────────── */
-  var renderer = new marked.Renderer();
-
-  renderer.code = function (code, language) {
-    var lang      = (language || '').split(/\s/)[0];
-    var validLang = lang && hljs.getLanguage(lang) ? lang : null;
-    var highlighted;
-
-    try {
-      highlighted = validLang
-        ? hljs.highlight(code, { language: validLang }).value
-        : hljs.highlightAuto(code).value;
-    } catch (e) {
-      highlighted = code
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>');
-    }
-
-    var label = lang || 'code';
-    return '<pre data-lang="' + label + '"><code class="hljs">' + highlighted + '</code></pre>';
+    btnMd            : document.getElementById('btn-md'),
+    btnPdf           : document.getElementById('btn-pdf'),
+    btnOpen          : document.getElementById('btn-open'),
+    btnSave          : document.getElementById('btn-save'),
+    fileNameInput    : document.getElementById('fileNameInput'),
+    fileOpenBadge    : document.getElementById('fileOpenBadge'),
+    fileOpenName     : document.getElementById('fileOpenName'),
+    chkAutoSave      : document.getElementById('chkAutoSave'),
+    autoSaveCountdown: document.getElementById('autoSaveCountdown'),
+    statusLeft       : document.getElementById('statusLeft'),
+    statusRight      : document.getElementById('statusRight'),
   };
 
-  marked.setOptions({
-    renderer  : renderer,
-    breaks    : true,
-    gfm       : true,
-    headerIds : false,
-    mangle    : false
-  });
+  // Detecta suporte à File System Access API (Chrome/Edge)
+  var FSA_SUPORTADO = (typeof window.showOpenFilePicker === 'function');
 
-  /* ──────────────────────────────────────────────
-     4. RENDERIZAÇÃO
-        Chama capturarEstado() para garantir um
-        snapshot fresco, renderiza o Markdown e
-        restaura scroll + cursor a partir de
-        editorState (o reflow do innerHTML pode
-        deslocar ambos).
-  ────────────────────────────────────────────── */
-  function atualizarPreview() {
-    //capturarEstado(); // garante snapshot atualizado antes de qualquer mudança
+  var STATE = {
+    scrollEditor     : 0,
+    scrollPreview    : 0,
+    cursorStart      : 0,
+    cursorEnd        : 0,
+    syncAtivo        : true,
+    previewLivre     : false,
+    timerLiberar     : null,
+    isResizing       : false,
+    corAtual         : CONFIG.corInicial,
+    clickTimer       : null,
+    linkSavedStart   : 0,
+    linkSavedEnd     : 0,
+    imageSavedStart  : 0,
+    imageSavedEnd    : 0,
+    // Arquivo aberto
+    fileHandle       : null,
+    fileInputRef     : null,
+    fileNomeAberto   : null,
+    // Auto-save
+    autoSaveTimer    : null,
+    autoSaveCountdown: 0,
+    autoSaveTickTimer: null,
+    statusMsgTimer   : null,
+  };
 
-    try {
-      preview.innerHTML = marked.parse(textarea.value);
-    } catch (e) {
-      preview.innerHTML = '<p style="color:red">Erro ao renderizar: ' + e.message + '</p>';
-    }
-
-    // Restaura o que o reflow pode ter deslocado
-    textarea.scrollTop      = editorState.scrollEditor;
-    preview.scrollTop       = editorState.scrollPreview;
-    textarea.selectionStart = editorState.cursorStart;
-    textarea.selectionEnd   = editorState.cursorEnd;
-    textarea.focus();
+  /* ─── Helpers de status ─── */
+  function setStatus(msg, erro) {
+    clearTimeout(STATE.statusMsgTimer);
+    DOM.statusLeft.textContent = msg;
+    DOM.statusLeft.className   = erro ? 'status-msg erro' : 'status-msg';
+    STATE.statusMsgTimer = setTimeout(function () {
+      DOM.statusLeft.textContent = 'Pronto';
+      DOM.statusLeft.className   = '';
+    }, 4000);
   }
 
-  // Re-renderiza a cada keystroke
-  textarea.addEventListener('input', atualizarPreview);
+  function setStatusRight(msg) {
+    DOM.statusRight.textContent = msg;
+  }
 
-  /* ──────────────────────────────────────────────
-     5. HELPERS DE EDIÇÃO
-        getSel()       → snapshot de seleção atual
-        aplicarValor() → aplica novo valor sem perder scroll/cursor
-        setCursor()    → move o cursor para uma posição
-        wrap()         → envolve seleção com marcadores (com toggle)
-        insert()       → insere texto cru na posição do cursor
-        linePrefix()   → adiciona/remove prefixo em cada linha selecionada
-  ────────────────────────────────────────────── */
+  /* ─── Nome do arquivo (sem extensão) ─── */
+  function getNomeArquivo() {
+    return (DOM.fileNameInput.value.trim() || 'documento').replace(/\.(md|pdf)$/i, '');
+  }
 
-  /** Retorna {start, end, text, value} do estado atual do textarea */
-  function getSel() {
-    return {
-      start : textarea.selectionStart,
-      end   : textarea.selectionEnd,
-      text  : textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
-      value : textarea.value
+  /* ═══════════════════════════════════════════════════════════════
+     CSS para exportação PDF
+  ═══════════════════════════════════════════════════════════════ */
+  var PDF_CSS = [
+    '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:"Segoe UI",Georgia,serif;font-size:13px;line-height:1.8;',
+      'color:#1e293b;background:#fff;padding:36px 52px;max-width:860px;margin:0 auto}',
+    'h1{font-size:2em;font-weight:700;color:#111827;border-bottom:2px solid #e5e7eb;',
+      'padding-bottom:.3em;margin:1.2em 0 .5em}',
+    'h2{font-size:1.5em;font-weight:700;color:#111827;border-bottom:1px solid #e5e7eb;',
+      'padding-bottom:.2em;margin:1em 0 .4em}',
+    'h3{font-size:1.2em;font-weight:700;color:#111827;margin:.9em 0 .3em}',
+    'h4,h5,h6{font-weight:700;color:#1e293b;margin:.8em 0 .3em}',
+    'p{margin:.5em 0} a{color:#4f46e5}',
+    'strong{font-weight:700} em{font-style:italic}',
+    'del{text-decoration:line-through;color:#9ca3af} u{text-decoration:underline}',
+    'ul,ol{padding-left:1.5em;margin:.4em 0} li{margin:.25em 0}',
+    'hr{border:none;border-top:1px solid #e5e7eb;margin:1.2em 0}',
+    'blockquote{border-left:4px solid #a5b4fc;margin:.8em 0;padding:.4em 1em;',
+      'background:#f5f3ff;color:#4b5563;border-radius:0 4px 4px 0}',
+    'code{background:#1e1e2e;color:#a5d6ff;padding:2px 5px;border-radius:3px;',
+      'font-family:"Fira Code",Consolas,monospace;font-size:.84em}',
+    'pre{background:#0d1117;border:1px solid #30363d;border-radius:6px;',
+      'margin:1em 0;overflow:hidden;page-break-inside:avoid}',
+    'pre::before{content:attr(data-lang);display:block;background:#161b22;',
+      'color:#8b949e;font-size:.68rem;font-family:Consolas,monospace;',
+      'padding:3px 12px;border-bottom:1px solid #30363d;',
+      'text-transform:uppercase;letter-spacing:.05em}',
+    'pre code{display:block;background:none;color:#c9d1d9;padding:12px 16px;',
+      'font-size:.82em;line-height:1.6;white-space:pre-wrap;word-break:break-all}',
+    '.hljs{color:#c9d1d9;background:#0d1117}',
+    '.hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,',
+      '.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}',
+    '.hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,',
+      '.hljs-title.function_{color:#d2a8ff}',
+    '.hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,',
+      '.hljs-operator,.hljs-selector-attr,.hljs-selector-class,',
+      '.hljs-selector-id,.hljs-variable{color:#79c0ff}',
+    '.hljs-meta .hljs-string,.hljs-regexp,.hljs-string{color:#a5d6ff}',
+    '.hljs-built_in,.hljs-symbol{color:#ffa657}',
+    '.hljs-code,.hljs-comment,.hljs-formula{color:#8b949e}',
+    '.hljs-name,.hljs-quote,.hljs-selector-pseudo,.hljs-selector-tag{color:#7ee787}',
+    '.hljs-subst{color:#c9d1d9}',
+    '.hljs-section{color:#1f6feb;font-weight:700}',
+    '.hljs-bullet{color:#f2cc60}',
+    '.hljs-emphasis{color:#c9d1d9;font-style:italic}',
+    '.hljs-strong{color:#c9d1d9;font-weight:700}',
+    '.hljs-addition{color:#aff5b4;background-color:#033a16}',
+    '.hljs-deletion{color:#ffdcd7;background-color:#67060c}',
+    'table{border-collapse:collapse;width:100%;margin:.8em 0;font-size:.9em}',
+    'th{background:#f3f4f6;font-weight:600;color:#111827;',
+      'border:1px solid #e5e7eb;padding:7px 12px;text-align:left}',
+    'td{border:1px solid #e5e7eb;padding:7px 12px;color:#1e293b}',
+    'tr:nth-child(even) td{background:#f9fafb}',
+    'img{max-width:100%;border-radius:4px;margin:.4em 0}',
+    '@media print{body{padding:0}',
+      'pre,table,blockquote{page-break-inside:avoid}',
+      'h1,h2,h3{page-break-after:avoid}}',
+  ].join('');
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: Editor
+  ═══════════════════════════════════════════════════════════════ */
+  var Editor = (function () {
+
+    function capturar() {
+      STATE.scrollEditor  = DOM.textarea.scrollTop;
+      STATE.scrollPreview = DOM.preview.scrollTop;
+      STATE.cursorStart   = DOM.textarea.selectionStart;
+      STATE.cursorEnd     = DOM.textarea.selectionEnd;
+    }
+
+    function renderizar(restaurar) {
+      var sv, sp, cs, ce;
+      if (restaurar) {
+        sv = STATE.scrollEditor;
+        sp = STATE.scrollPreview;
+        cs = STATE.cursorStart;
+        ce = STATE.cursorEnd;
+      }
+      try {
+        DOM.preview.innerHTML = marked.parse(DOM.textarea.value);
+      } catch (e) {
+        DOM.preview.innerHTML =
+          '<p style="color:red">Erro ao renderizar: ' + e.message + '</p>';
+      }
+      if (restaurar) {
+        DOM.textarea.scrollTop      = sv;
+        DOM.preview.scrollTop       = sp;
+        DOM.textarea.selectionStart = cs;
+        DOM.textarea.selectionEnd   = ce;
+        DOM.textarea.focus();
+      }
+    }
+
+    function getSel() {
+      var s = DOM.textarea.selectionStart;
+      var e = DOM.textarea.selectionEnd;
+      return { start: s, end: e, text: DOM.textarea.value.slice(s, e), value: DOM.textarea.value };
+    }
+
+    function aplicarValor(novoValor, novoStart, novoEnd) {
+      capturar();
+      DOM.textarea.value          = novoValor;
+      DOM.textarea.scrollTop      = STATE.scrollEditor;
+      DOM.textarea.selectionStart = novoStart;
+      DOM.textarea.selectionEnd   = novoEnd;
+      STATE.cursorStart = novoStart;
+      STATE.cursorEnd   = novoEnd;
+      DOM.textarea.focus();
+      renderizar(true);
+    }
+
+    function wrap(open, close) {
+      var sel = getSel();
+      var s = sel.start, e = sel.end, t = sel.text, v = sel.value;
+      if (!t) {
+        aplicarValor(v.slice(0, s) + open + close + v.slice(e), s + open.length, s + open.length);
+        return;
+      }
+      var before = v.slice(s - open.length, s);
+      var after  = v.slice(e, e + close.length);
+      if (before === open && after === close) {
+        aplicarValor(v.slice(0, s - open.length) + t + v.slice(e + close.length), s - open.length, e - open.length);
+      } else {
+        aplicarValor(v.slice(0, s) + open + t + close + v.slice(e), s + open.length, e + open.length);
+      }
+    }
+
+    function insert(txt) {
+      var sel = getSel();
+      aplicarValor(sel.value.slice(0, sel.start) + txt + sel.value.slice(sel.end), sel.start + txt.length, sel.start + txt.length);
+    }
+
+    function linePrefix(prefix) {
+      var sel = getSel();
+      var s = sel.start, e = sel.end, v = sel.value;
+      var ls = v.lastIndexOf('\n', s - 1) + 1;
+      var le = v.indexOf('\n', e);
+      var re = le === -1 ? v.length : le;
+      var block   = v.slice(ls, re);
+      var lines   = block.split('\n');
+      var allHave = lines.every(function (l) { return l.indexOf(prefix) === 0; });
+      var newBlock = allHave
+        ? lines.map(function (l) { return l.slice(prefix.length); }).join('\n')
+        : lines.map(function (l) { return l.indexOf(prefix) === 0 ? l : prefix + l; }).join('\n');
+      var delta = newBlock.length - block.length;
+      aplicarValor(v.slice(0, ls) + newBlock + v.slice(re), s + (allHave ? -prefix.length : prefix.length), e + delta);
+    }
+
+    function insertCodeBlock() {
+      var sel     = getSel();
+      var content = sel.text || CONFIG.codeBlockPlaceholder;
+      var lang    = CONFIG.codeBlockLangPadrao;
+      var block   = '```' + lang + '\n' + content + '\n```\n';
+      aplicarValor(sel.value.slice(0, sel.start) + block + sel.value.slice(sel.end), sel.start + lang.length + 4, sel.start + lang.length + 4 + content.length);
+    }
+
+    return { capturar, renderizar, getSel, aplicarValor, wrap, insert, linePrefix, insertCodeBlock };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: Renderer (Marked + Highlight.js)
+  ═══════════════════════════════════════════════════════════════ */
+  var MarkdownRenderer = (function () {
+    function configurar() {
+      var renderer = new marked.Renderer();
+      renderer.code = function (code, language) {
+        var lang      = (language || '').split(/\s/)[0];
+        var validLang = lang && hljs.getLanguage(lang) ? lang : null;
+        var highlighted;
+        try {
+          highlighted = validLang
+            ? hljs.highlight(code, { language: validLang }).value
+            : hljs.highlightAuto(code).value;
+        } catch (_e) {
+          highlighted = code.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+        }
+        var label = lang || 'code';
+        return '<pre data-lang="' + label + '"><code class="hljs">' + highlighted + '</code></pre>';
+      };
+      marked.setOptions({ renderer, breaks: true, gfm: true, headerIds: false, mangle: false });
+    }
+    return { configurar };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: Toolbar
+  ═══════════════════════════════════════════════════════════════ */
+  var Toolbar = (function () {
+    var ACOES_SIMPLES = {
+      'bold'        : function () { Editor.wrap('**', '**'); },
+      'italic'      : function () { Editor.wrap('*', '*'); },
+      'underline'   : function () { Editor.wrap('<u>', '</u>'); },
+      'strike'      : function () { Editor.wrap('~~', '~~'); },
+      'h1'          : function () { Editor.linePrefix('# '); },
+      'h2'          : function () { Editor.linePrefix('## '); },
+      'h3'          : function () { Editor.linePrefix('### '); },
+      'ul'          : function () { Editor.linePrefix('- '); },
+      'ol'          : function () { Editor.linePrefix('1. '); },
+      'quote'       : function () { Editor.linePrefix('> '); },
+      'inline-code' : function () { Editor.wrap('`', '`'); },
+      'code-block'  : function () { Editor.insertCodeBlock(); },
+      'hr'          : function () { Editor.insert('\n---\n'); },
+      'table'       : function () {
+        Editor.insert('\n| Coluna 1 | Coluna 2 | Coluna 3 |\n|----------|----------|----------|\n| Valor 1  | Valor 2  | Valor 3  |\n');
+      },
+      'image'       : function () { ImageModal.abrir(); },
+      'link'        : function () { LinkModal.abrir(); },
+      'fontVermelho': function () { Editor.wrap('<span style="color:red">', '</span>'); },
+      'fundoAmarelo': function () { Editor.wrap('<span style="background-color:yellow">', '</span>'); },
     };
-  }
-
-  /**
-   * Aplica novoValor no textarea preservando o scroll via editorState,
-   * depois posiciona o cursor em [novoStart, novoEnd] e
-   * mantém editorState sincronizado com as novas posições.
-   */
-  function aplicarValor(novoValor, novoStart, novoEnd) {
-    capturarEstado(); // garante snapshot atualizado antes de qualquer mudança
-    textarea.value     = novoValor;                  // browser reseta scrollTop aqui
-    textarea.scrollTop = editorState.scrollEditor;   // restaura imediatamente do estado salvo
-    textarea.focus();
-    textarea.selectionStart = novoStart;
-    textarea.selectionEnd   = novoEnd;
-
-    // Atualiza o estado com as novas posições de cursor
-    editorState.cursorStart = novoStart;
-    editorState.cursorEnd   = novoEnd;
-
-    textarea.focus();
-    atualizarPreview();
-  }
-
-  /** Move o cursor sem alterar o valor */
-  function setCursor(pos) {
-    textarea.focus();
-    textarea.selectionStart = textarea.selectionEnd = pos;
-  }
-
-  /**
-   * Envolve o texto selecionado com open/close.
-   * Se já estiver envolvido, remove (toggle).
-   * Se não houver seleção, insere os marcadores e posiciona o cursor entre eles.
-   */
-  function wrap(open, close) {
-    var sel = getSel();
-    var s = sel.start, e = sel.end, t = sel.text, v = sel.value;
-
-    if (!t) {
-      aplicarValor(
-        v.slice(0, s) + open + close + v.slice(e),
-        s + open.length,
-        s + open.length
-      );
-      return;
+    function init() {
+      DOM.toolbar.addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        var acao = ACOES_SIMPLES[btn.dataset.action];
+        if (acao) acao();
+      });
     }
+    return { init };
+  }());
 
-    var before = v.slice(s - open.length, s);
-    var after  = v.slice(e, e + close.length);
-
-    if (before === open && after === close) {
-      // Toggle off: remove os marcadores existentes
-      aplicarValor(
-        v.slice(0, s - open.length) + t + v.slice(e + close.length),
-        s - open.length,
-        e - open.length
-      );
-    } else {
-      // Toggle on: aplica os marcadores
-      aplicarValor(
-        v.slice(0, s) + open + t + close + v.slice(e),
-        s + open.length,
-        e + open.length
-      );
-    }
-  }
-
-  /** Insere texto bruto na posição atual do cursor */
-  function insert(txt) {
-    var sel = getSel();
-    aplicarValor(
-      sel.value.slice(0, sel.start) + txt + sel.value.slice(sel.end),
-      sel.start + txt.length,
-      sel.start + txt.length
-    );
-  }
-
-  /**
-   * Adiciona/remove prefix no início de cada linha dentro da seleção (toggle).
-   * Usado para listas, cabeçalhos, citações, etc.
-   */
-  function linePrefix(prefix) {
-    var sel = getSel();
-    var s = sel.start, e = sel.end, v = sel.value;
-
-    var ls = v.lastIndexOf('\n', s - 1) + 1;
-    var le = v.indexOf('\n', e);
-    var re = le === -1 ? v.length : le;
-
-    var block   = v.slice(ls, re);
-    var lines   = block.split('\n');
-    var allHave = lines.every(function (l) { return l.indexOf(prefix) === 0; });
-
-    var newBlock = allHave
-      ? lines.map(function (l) { return l.slice(prefix.length); }).join('\n')
-      : lines.map(function (l) { return l.indexOf(prefix) === 0 ? l : prefix + l; }).join('\n');
-
-    var delta = newBlock.length - block.length;
-
-    aplicarValor(
-      v.slice(0, ls) + newBlock + v.slice(re),
-      s + (allHave ? -prefix.length : prefix.length),
-      e + delta
-    );
-  }
-
-  /* ──────────────────────────────────────────────
-     6. BARRA DE FERRAMENTAS
-        Event delegation no container .toolbar.
-  ────────────────────────────────────────────── */
-  document.querySelector('.toolbar').addEventListener('click', function (e) {
-    var btn = e.target.closest('button[data-action]');
-    if (!btn) return;
-    var action = btn.dataset.action;
-    var sel, content, block;
-
-    switch (action) {
-      case 'bold':        wrap('**', '**');        break;
-      case 'italic':      wrap('*', '*');          break;
-      case 'underline':   wrap('<u>', '</u>');     break;
-      case 'strike':      wrap('~~', '~~');        break;
-
-      case 'h1': linePrefix('# ');   break;
-      case 'h2': linePrefix('## ');  break;
-      case 'h3': linePrefix('### '); break;
-
-      case 'ul':    linePrefix('- ');  break;
-      case 'ol':    linePrefix('1. '); break;
-      case 'quote': linePrefix('> ');  break;
-
-      case 'inline-code': wrap('`', '`'); break;
-      case 'code-block':
-        sel     = getSel();
-        content = sel.text || '// seu codigo aqui';
-        block   = '```js\n' + content + '\n```\n';
-        aplicarValor(
-          sel.value.slice(0, sel.start) + block + sel.value.slice(sel.end),
-          sel.start + 4,
-          sel.start + 4 + content.length
-        );
-        break;
-
-      case 'hr':
-        insert('\n---\n');
-        break;
-      case 'table':
-        insert('\n| Coluna 1 | Coluna 2 | Coluna 3 |\n|----------|----------|----------|\n| Valor 1  | Valor 2  | Valor 3  |\n');
-        break;
-      case 'image': imageFileInput.click(); break;
-      case 'link':  openLinkModal();        break;
-
-      case 'fontVermelho': wrap('<span style="color:red">',               '</span>'); break;
-      case 'fundoAmarelo': wrap('<span style="background-color:yellow">', '</span>'); break;
-    }
-  });
-
-  /* ──────────────────────────────────────────────
-     7. ATALHOS DE TECLADO
-  ────────────────────────────────────────────── */
-  textarea.addEventListener('keydown', function (e) {
-    var ctrl = e.ctrlKey || e.metaKey;
-
-    if (ctrl && e.key === 'b') { e.preventDefault(); wrap('**', '**'); }
-    if (ctrl && e.key === 'i') { e.preventDefault(); wrap('*', '*');   }
-    if (ctrl && e.key === 'd') { e.preventDefault(); wrap('~~', '~~'); }
-    if (ctrl && e.key === 'k') { e.preventDefault(); openLinkModal();  }
-
-    if (e.key === 'Tab') { e.preventDefault(); insert('  '); }
-  });
-
-  /* ──────────────────────────────────────────────
-     8. SELETOR DE COR PERSONALIZADA
-        1 clique  → aplica corAtual como span inline
-        2 cliques → abre o color picker nativo
-  ────────────────────────────────────────────── */
-  var corAtual   = '#2563eb';
-  var clickTimer = null;
-
-  corSwatch.style.background = corAtual;
-
-  btnCor.addEventListener('click', function (e) {
-    if (e.target === fontColorInput) return;
-    e.stopPropagation();
-
-    if (clickTimer) {
-      clearTimeout(clickTimer);
-      clickTimer = null;
-      fontColorInput.click();
-    } else {
-      clickTimer = setTimeout(function () {
-        clickTimer = null;
-        wrap('<span style="color:' + corAtual + '">', '</span>');
-      }, 280);
-    }
-  });
-
-  fontColorInput.addEventListener('change', function () {
-    corAtual = this.value;
-    corSwatch.style.background = corAtual;
-    wrap('<span style="color:' + corAtual + '">', '</span>');
-  });
-
-  /* ──────────────────────────────────────────────
-     9. INSERÇÃO DE IMAGEM POR ARQUIVO
-  ────────────────────────────────────────────── */
-  imageFileInput.addEventListener('change', function () {
-    var file = this.files[0];
-    if (!file) return;
-
-    var blobUrl = URL.createObjectURL(file);
-    var nome    = file.name.replace(/[|$$|$|()]/g, '');
-
-    insert('![' + nome + '](' + blobUrl + ')');
-    this.value = '';
-  });
-
-  /* ──────────────────────────────────────────────
-     10. REDIMENSIONADOR DE PAINÉIS
-  ────────────────────────────────────────────── */
-  var isResizing = false;
-
-  resizerEl.addEventListener('mousedown', function () {
-    isResizing = true;
-    resizerEl.classList.add('active');
-    document.body.style.cursor     = 'col-resize';
-    document.body.style.userSelect = 'none';
-  });
-
-  document.addEventListener('mousemove', function (e) {
-    if (!isResizing) return;
-    var rect = mainEl.getBoundingClientRect();
-    var pct  = ((e.clientX - rect.left) / rect.width) * 100;
-    editorPane.style.width = Math.max(15, Math.min(85, pct)) + '%';
-  });
-
-  document.addEventListener('mouseup', function () {
-    if (!isResizing) return;
-    isResizing = false;
-    resizerEl.classList.remove('active');
-    document.body.style.cursor     = '';
-    document.body.style.userSelect = '';
-  });
-
-  /* ──────────────────────────────────────────────
-     11. SINCRONIZAÇÃO DE SCROLL
-  ────────────────────────────────────────────── */
-  var syncAtivo    = true;
-  var previewLivre = false;
-  var timerLiberar = null;
-
-  preview.addEventListener('mousedown', function () {
-    previewLivre = true;
-    clearTimeout(timerLiberar);
-  });
-
-  preview.addEventListener('mouseup', function () {
-    clearTimeout(timerLiberar);
-    timerLiberar = setTimeout(function () { previewLivre = false; }, 2000);
-  });
-
-  // O listener de scroll do textarea agora chama capturarEstado()
-  // antes de sincronizar, garantindo que editorState.scrollEditor
-  // esteja sempre atualizado.
-  textarea.addEventListener('scroll', function () {
-    capturarEstado(); // já registrado acima, mas explícito aqui para o sync
-    if (!syncAtivo || previewLivre) return;
-    var ratio = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight || 1);
-    preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
-  });
-
-  btnSync.addEventListener('click', function () {
-    syncAtivo    = !syncAtivo;
-    previewLivre = false;
-    clearTimeout(timerLiberar);
-    btnSync.textContent = syncAtivo ? '\u2195 Sync' : '\u2195 Livre';
-    btnSync.classList.toggle('off', !syncAtivo);
-  });
-
-  /* ──────────────────────────────────────────────
-     12. MODAL DE HYPERLINK
-  ────────────────────────────────────────────── */
-  var savedStart, savedEnd;
-
-  function openLinkModal() {
-    var sel    = getSel();
-    savedStart = sel.start;
-    savedEnd   = sel.end;
-
-    document.getElementById('linkText').value = sel.text || '';
-    document.getElementById('linkUrl').value  = '';
-    document.getElementById('linkModal').classList.add('open');
-
-    setTimeout(function () {
-      (sel.text
-        ? document.getElementById('linkUrl')
-        : document.getElementById('linkText')
-      ).focus();
-    }, 50);
-  }
-
-  function closeLinkModal() {
-    document.getElementById('linkModal').classList.remove('open');
-    textarea.focus();
-  }
-
-  document.getElementById('linkCancel').addEventListener('click', closeLinkModal);
-
-  document.getElementById('linkConfirm').addEventListener('click', function () {
-    var text = document.getElementById('linkText').value.trim() || 'link';
-    var url  = document.getElementById('linkUrl').value.trim()  || '#';
-    var md   = '[' + text + '](' + url + ')';
-    var v    = textarea.value;
-
-    aplicarValor(
-      v.slice(0, savedStart) + md + v.slice(savedEnd),
-      savedStart + md.length,
-      savedStart + md.length
-    );
-    closeLinkModal();
-  });
-
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeLinkModal();
-  });
-
-  /* ──────────────────────────────────────────────
-     13. EXPORTAR PDF
-         CSS do hljs embutido diretamente a partir
-         das classes reais do github-dark.min.css
-         para garantir fidelidade na impressão.
-  ────────────────────────────────────────────── */
-  document.getElementById('btn-pdf').addEventListener('click', function () {
-    var conteudo = preview.innerHTML;
-    var win = window.open('', '_blank', 'width=960,height=720');
-    if (!win) { alert('Permita pop-ups para exportar o PDF.'); return; }
-
-    var html = [
-      '<!DOCTYPE html>',
-      '<html lang="pt-BR"><head><meta charset="UTF-8"><title>documento</title>',
-      '<style>',
-      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}',
-      'body{font-family:"Segoe UI",Georgia,serif;font-size:13px;line-height:1.8;color:#1e293b;background:#fff;padding:36px 52px;max-width:860px;margin:0 auto}',
-      'h1{font-size:2em;font-weight:700;color:#111827;border-bottom:2px solid #e5e7eb;padding-bottom:.3em;margin:1.2em 0 .5em}',
-      'h2{font-size:1.5em;font-weight:700;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:.2em;margin:1em 0 .4em}',
-      'h3{font-size:1.2em;font-weight:700;color:#111827;margin:.9em 0 .3em}',
-      'h4,h5,h6{font-weight:700;color:#1e293b;margin:.8em 0 .3em}',
-      'p{margin:.5em 0} a{color:#4f46e5}',
-      'strong{font-weight:700} em{font-style:italic}',
-      'del{text-decoration:line-through;color:#9ca3af} u{text-decoration:underline}',
-      'ul,ol{padding-left:1.5em;margin:.4em 0} li{margin:.25em 0}',
-      'hr{border:none;border-top:1px solid #e5e7eb;margin:1.2em 0}',
-      'blockquote{border-left:4px solid #a5b4fc;margin:.8em 0;padding:.4em 1em;background:#f5f3ff;color:#4b5563;border-radius:0 4px 4px 0}',
-      'code{background:#1e1e2e;color:#a5d6ff;padding:2px 5px;border-radius:3px;font-family:"Fira Code",Consolas,monospace;font-size:.84em}',
-      'pre{background:#0d1117;border:1px solid #30363d;border-radius:6px;margin:1em 0;overflow:hidden;page-break-inside:avoid}',
-      'pre::before{content:attr(data-lang);display:block;background:#161b22;color:#8b949e;font-size:.68rem;font-family:Consolas,monospace;padding:3px 12px;border-bottom:1px solid #30363d;text-transform:uppercase;letter-spacing:.05em}',
-      'pre code{display:block;background:none;color:#c9d1d9;padding:12px 16px;font-size:.82em;line-height:1.6;white-space:pre-wrap;word-break:break-all}',
-      /* ── Tokens do github-dark copiados diretamente do CDN ── */
-      '.hljs{color:#c9d1d9;background:#0d1117}',
-      '.hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}',
-      '.hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}',
-      '.hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id,.hljs-variable{color:#79c0ff}',
-      '.hljs-meta .hljs-string,.hljs-regexp,.hljs-string{color:#a5d6ff}',
-      '.hljs-built_in,.hljs-symbol{color:#ffa657}',
-      '.hljs-code,.hljs-comment,.hljs-formula{color:#8b949e}',
-      '.hljs-name,.hljs-quote,.hljs-selector-pseudo,.hljs-selector-tag{color:#7ee787}',
-      '.hljs-subst{color:#c9d1d9}',
-      '.hljs-section{color:#1f6feb;font-weight:700}',
-      '.hljs-bullet{color:#f2cc60}',
-      '.hljs-emphasis{color:#c9d1d9;font-style:italic}',
-      '.hljs-strong{color:#c9d1d9;font-weight:700}',
-      '.hljs-addition{color:#aff5b4;background-color:#033a16}',
-      '.hljs-deletion{color:#ffdcd7;background-color:#67060c}',
-      /* ─────────────────────────────────────────────────────── */
-      'table{border-collapse:collapse;width:100%;margin:.8em 0;font-size:.9em}',
-      'th{background:#f3f4f6;font-weight:600;color:#111827;border:1px solid #e5e7eb;padding:7px 12px;text-align:left}',
-      'td{border:1px solid #e5e7eb;padding:7px 12px;color:#1e293b}',
-      'tr:nth-child(even) td{background:#f9fafb}',
-      'img{max-width:100%;border-radius:4px;margin:.4em 0}',
-      '@media print{body{padding:0}pre,table,blockquote{page-break-inside:avoid}h1,h2,h3{page-break-after:avoid}}',
-      '</style></head>',
-      '<body>' + conteudo + '</body></html>'
-    ].join('\n');
-
-    win.document.write(html);
-    win.document.close();
-    win.onload = function () {
-      setTimeout(function () { win.focus(); win.print(); win.close(); }, 400);
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: Atalhos
+  ═══════════════════════════════════════════════════════════════ */
+  var Atalhos = (function () {
+    var MAPA_CTRL = {
+      'b' : function () { Editor.wrap('**', '**'); },
+      'i' : function () { Editor.wrap('*', '*'); },
+      'd' : function () { Editor.wrap('~~', '~~'); },
+      'k' : function () { LinkModal.abrir(); },
+      's' : function () { GerenciadorArquivo.salvar(); },
     };
-  });
+    function init() {
+      DOM.textarea.addEventListener('keydown', function (e) {
+        var ctrl = e.ctrlKey || e.metaKey;
+        if (ctrl && MAPA_CTRL[e.key]) { e.preventDefault(); MAPA_CTRL[e.key](); return; }
+        if (e.key === 'Tab') { e.preventDefault(); Editor.insert('  '); }
+      });
+    }
+    return { init };
+  }());
 
-  /* ──────────────────────────────────────────────
-     14. EXPORTAR .MD
-  ────────────────────────────────────────────── */
-  document.getElementById('btn-md').addEventListener('click', function () {
-    var blob = new Blob([textarea.value], { type: 'text/markdown;charset=utf-8' });
-    var a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = 'documento.md';
-    a.click();
-  });
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: SeletorCor
+  ═══════════════════════════════════════════════════════════════ */
+  var SeletorCor = (function () {
+    function aplicarCor() {
+      Editor.wrap('<span style="color:' + STATE.corAtual + '">', '</span>');
+    }
+    function init() {
+      STATE.corAtual = CONFIG.corInicial;
+      DOM.corSwatch.style.background = STATE.corAtual;
+      DOM.fontColorInput.value       = STATE.corAtual;
+      DOM.btnCor.addEventListener('click', function (e) {
+        if (e.target === DOM.fontColorInput) return;
+        e.stopPropagation();
+        if (STATE.clickTimer) {
+          clearTimeout(STATE.clickTimer);
+          STATE.clickTimer = null;
+          DOM.fontColorInput.click();
+        } else {
+          STATE.clickTimer = setTimeout(function () {
+            STATE.clickTimer = null;
+            aplicarCor();
+          }, CONFIG.corClickDelay);
+        }
+      });
+      DOM.fontColorInput.addEventListener('change', function () {
+        STATE.corAtual = this.value;
+        DOM.corSwatch.style.background = STATE.corAtual;
+      });
+    }
+    return { init };
+  }());
 
-  /* ──────────────────────────────────────────────
-     15. CONTEÚDO INICIAL DE EXEMPLO
-  ────────────────────────────────────────────── */
-  textarea.value = [
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: GerenciadorArquivo
+     — Abrir .md (FSA API ou <input type=file> fallback)
+     — Salvar (sobrescreve via FSA API; ou faz download no fallback)
+     — Auto-save
+  ═══════════════════════════════════════════════════════════════ */
+  var GerenciadorArquivo = (function () {
+
+    /* ── Atualiza UI quando um arquivo está aberto ── */
+    function marcarArquivoAberto(nome) {
+      STATE.fileNomeAberto        = nome;
+      DOM.fileOpenName.textContent = nome;
+      DOM.fileOpenBadge.classList.add('visible');
+      DOM.btnSave.disabled        = false;
+      // Preenche campo de nome sem extensão
+      DOM.fileNameInput.value     = nome.replace(/\.md$/i, '');
+      setStatusRight('Arquivo: ' + nome);
+    }
+
+    /* ── Carrega texto no editor ── */
+    function carregarTexto(texto, nome) {
+      DOM.textarea.value = texto;
+      Editor.capturar();
+      Editor.renderizar(true);
+      marcarArquivoAberto(nome);
+      setStatus('Arquivo "' + nome + '" carregado.');
+    }
+
+    /* ── ABRIR via File System Access API (Chrome/Edge) ── */
+    async function abrirFSA() {
+      try {
+        var handles = await window.showOpenFilePicker({
+          types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }],
+          multiple: false,
+        });
+        var handle = handles[0];
+        var file   = await handle.getFile();
+        var texto  = await file.text();
+        STATE.fileHandle    = handle;
+        STATE.fileInputRef  = null;
+        carregarTexto(texto, file.name);
+      } catch (err) {
+        if (err.name !== 'AbortError') setStatus('Erro ao abrir: ' + err.message, true);
+      }
+    }
+
+    /* ── ABRIR via <input type=file> (fallback Firefox/Safari) ── */
+    function abrirFallback() {
+      DOM.openMdFileInput.click();
+    }
+
+    /* ── Lê o arquivo selecionado no input fallback ── */
+    function onInputChange() {
+      var file = DOM.openMdFileInput.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        STATE.fileHandle   = null;
+        STATE.fileInputRef = file;
+        carregarTexto(e.target.result, file.name);
+      };
+      reader.readAsText(file, 'utf-8');
+      DOM.openMdFileInput.value = '';
+    }
+
+    /* ── SALVAR: sobrescreve via FSA ou faz download no fallback ── */
+    async function salvar() {
+      var conteudo = DOM.textarea.value;
+      var nome     = getNomeArquivo() + '.md';
+
+      // FSA: sobrescreve diretamente
+      if (FSA_SUPORTADO && STATE.fileHandle) {
+        try {
+          var writable = await STATE.fileHandle.createWritable();
+          await writable.write(conteudo);
+          await writable.close();
+          var agora = new Date().toLocaleTimeString('pt-BR');
+          setStatus('Salvo em "' + STATE.fileNomeAberto + '" às ' + agora + '.');
+          setStatusRight('Salvo às ' + agora);
+          return;
+        } catch (err) {
+          setStatus('Erro ao salvar: ' + err.message, true);
+          return;
+        }
+      }
+
+      // FSA sem handle ainda: abre diálogo "Salvar como"
+      if (FSA_SUPORTADO && !STATE.fileHandle) {
+        try {
+          var handle = await window.showSaveFilePicker({
+            suggestedName: nome,
+            types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }],
+          });
+          var writable2 = await handle.createWritable();
+          await writable2.write(conteudo);
+          await writable2.close();
+          STATE.fileHandle = handle;
+          var arquivo = await handle.getFile();
+          marcarArquivoAberto(arquivo.name);
+          setStatus('Arquivo salvo como "' + arquivo.name + '".');
+          return;
+        } catch (err) {
+          if (err.name !== 'AbortError') setStatus('Erro ao salvar: ' + err.message, true);
+          return;
+        }
+      }
+
+      // Fallback: download
+      var blob = new Blob([conteudo], { type: 'text/markdown;charset=utf-8' });
+      var a    = document.createElement('a');
+      a.href   = URL.createObjectURL(blob);
+      a.download = nome;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setStatus('Download de "' + nome + '" iniciado (modo fallback).');
+    }
+
+    /* ══════════════════════════════════════
+       AUTO-SAVE
+    ══════════════════════════════════════ */
+    function formatarCountdown(seg) {
+      var m = Math.floor(seg / 60);
+      var s = seg % 60;
+      return m + ':' + (s < 10 ? '0' : '') + s;
+    }
+
+    function pararAutoSave() {
+      clearInterval(STATE.autoSaveTimer);
+      clearInterval(STATE.autoSaveTickTimer);
+      STATE.autoSaveTimer     = null;
+      STATE.autoSaveTickTimer = null;
+      DOM.autoSaveCountdown.textContent = '';
+      DOM.autoSaveCountdown.className   = '';
+    }
+
+    function iniciarAutoSave() {
+      pararAutoSave();
+      STATE.autoSaveCountdown = CONFIG.autoSaveIntervaloSeg;
+
+      // Tick visual a cada segundo
+      STATE.autoSaveTickTimer = setInterval(function () {
+        STATE.autoSaveCountdown -= 1;
+        DOM.autoSaveCountdown.textContent = '(' + formatarCountdown(STATE.autoSaveCountdown) + ')';
+        DOM.autoSaveCountdown.className   = 'ativo';
+        if (STATE.autoSaveCountdown <= 0) {
+          STATE.autoSaveCountdown = CONFIG.autoSaveIntervaloSeg;
+        }
+      }, 1000);
+
+      // Salva a cada 5 minutos
+      STATE.autoSaveTimer = setInterval(function () {
+        if (STATE.fileHandle || FSA_SUPORTADO) {
+          salvar();
+        } else {
+          // Fallback: só salva se houver arquivo aberto referenciado
+          if (STATE.fileNomeAberto) salvar();
+        }
+      }, CONFIG.autoSaveIntervaloSeg * 1000);
+    }
+
+    function init() {
+      // Botão Abrir
+      DOM.btnOpen.addEventListener('click', function () {
+        FSA_SUPORTADO ? abrirFSA() : abrirFallback();
+      });
+
+      // Fallback input
+      DOM.openMdFileInput.addEventListener('change', onInputChange);
+
+      // Botão Salvar
+      DOM.btnSave.addEventListener('click', salvar);
+
+      // Checkbox Auto-save
+      DOM.chkAutoSave.addEventListener('change', function () {
+        if (this.checked) {
+          // Avisa se não há suporte FSA e nenhum arquivo aberto
+          if (!FSA_SUPORTADO && !STATE.fileNomeAberto) {
+            setStatus('Auto-save: nenhum arquivo aberto. Abra um .md primeiro.', true);
+            this.checked = false;
+            return;
+          }
+          iniciarAutoSave();
+          setStatus('Auto-save ativado (a cada 5 min).');
+        } else {
+          pararAutoSave();
+          setStatus('Auto-save desativado.');
+        }
+      });
+    }
+
+    return { init, salvar };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: Resizer
+  ═══════════════════════════════════════════════════════════════ */
+  var Resizer = (function () {
+    function onMouseDown() {
+      STATE.isResizing = true;
+      DOM.resizer.classList.add('active');
+      document.body.style.cursor     = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+    function onMouseMove(e) {
+      if (!STATE.isResizing) return;
+      var rect = DOM.main.getBoundingClientRect();
+      var pct  = ((e.clientX - rect.left) / rect.width) * 100;
+      DOM.editorPane.style.width = Math.max(CONFIG.resizerMin, Math.min(CONFIG.resizerMax, pct)) + '%';
+    }
+    function onMouseUp() {
+      if (!STATE.isResizing) return;
+      STATE.isResizing = false;
+      DOM.resizer.classList.remove('active');
+      document.body.style.cursor     = '';
+      document.body.style.userSelect = '';
+    }
+    function init() {
+      DOM.resizer.addEventListener('mousedown', onMouseDown);
+      document.addEventListener('mousemove',   onMouseMove);
+      document.addEventListener('mouseup',     onMouseUp);
+    }
+    return { init };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: ScrollSync
+  ═══════════════════════════════════════════════════════════════ */
+  var ScrollSync = (function () {
+    function sincronizar() {
+      if (!STATE.syncAtivo || STATE.previewLivre) return;
+      var ta    = DOM.textarea;
+      var ratio = ta.scrollTop / ((ta.scrollHeight - ta.clientHeight) || 1);
+      DOM.preview.scrollTop = ratio * (DOM.preview.scrollHeight - DOM.preview.clientHeight);
+    }
+    function init() {
+      DOM.preview.addEventListener('mousedown', function () {
+        STATE.previewLivre = true;
+        clearTimeout(STATE.timerLiberar);
+      });
+      DOM.preview.addEventListener('mouseup', function () {
+        clearTimeout(STATE.timerLiberar);
+        STATE.timerLiberar = setTimeout(function () { STATE.previewLivre = false; }, CONFIG.syncLiberarDelay);
+      });
+      DOM.textarea.addEventListener('scroll', function () {
+        Editor.capturar();
+        sincronizar();
+      });
+      DOM.btnSync.addEventListener('click', function () {
+        STATE.syncAtivo    = !STATE.syncAtivo;
+        STATE.previewLivre = false;
+        clearTimeout(STATE.timerLiberar);
+        DOM.btnSync.textContent = STATE.syncAtivo ? '\u2195 Sync' : '\u2195 Livre';
+        DOM.btnSync.classList.toggle('off', !STATE.syncAtivo);
+      });
+    }
+    return { init };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: LinkModal
+  ═══════════════════════════════════════════════════════════════ */
+  var LinkModal = (function () {
+    function abrir() {
+      var sel = Editor.getSel();
+      STATE.linkSavedStart = sel.start;
+      STATE.linkSavedEnd   = sel.end;
+      DOM.linkText.value   = sel.text || '';
+      DOM.linkUrl.value    = '';
+      DOM.linkModal.classList.add('open');
+      setTimeout(function () { (sel.text ? DOM.linkUrl : DOM.linkText).focus(); }, 50);
+    }
+    function fechar() {
+      DOM.linkModal.classList.remove('open');
+      DOM.textarea.focus();
+    }
+    function confirmar() {
+      var text = DOM.linkText.value.trim() || 'link';
+      var url  = DOM.linkUrl.value.trim()  || '#';
+      var md   = '[' + text + '](' + url + ')';
+      var v    = DOM.textarea.value;
+      Editor.aplicarValor(v.slice(0, STATE.linkSavedStart) + md + v.slice(STATE.linkSavedEnd), STATE.linkSavedStart + md.length, STATE.linkSavedStart + md.length);
+      fechar();
+    }
+    function init() {
+      DOM.linkCancel.addEventListener('click', fechar);
+      DOM.linkConfirm.addEventListener('click', confirmar);
+      [DOM.linkText, DOM.linkUrl].forEach(function (input) {
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); confirmar(); } });
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && DOM.linkModal.classList.contains('open')) fechar();
+      });
+      DOM.linkModal.addEventListener('click', function (e) { if (e.target === DOM.linkModal) fechar(); });
+    }
+    return { init, abrir };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: ImageModal (para inserir imagem por URL / Local)
+  ═══════════════════════════════════════════════════════════════ */
+  var ImageModal = (function () {
+    function abrir() {
+      var sel = Editor.getSel();
+      STATE.imageSavedStart = sel.start;
+      STATE.imageSavedEnd   = sel.end;
+      DOM.imageUrl.value    = '';
+      DOM.imageAltText.value = sel.text || ''; // Usa a seleção como alt text inicial
+      DOM.imageModal.classList.add('open');
+      setTimeout(function () { DOM.imageUrl.focus(); }, 50);
+    }
+    function fechar() {
+      DOM.imageModal.classList.remove('open');
+      DOM.textarea.focus();
+    }
+    function confirmar() {
+      var url  = DOM.imageUrl.value.trim();
+      var alt  = DOM.imageAltText.value.trim();
+      if (!url) {
+        alert('Por favor, insira a URL da imagem ou carregue um arquivo local.');
+        DOM.imageUrl.focus();
+        return;
+      }
+      var md   = '![' + alt + '](' + url + ')';
+      var v    = DOM.textarea.value;
+      Editor.aplicarValor(v.slice(0, STATE.imageSavedStart) + md + v.slice(STATE.imageSavedEnd), STATE.imageSavedStart + md.length, STATE.imageSavedStart + md.length);
+      fechar();
+    }
+
+    // Função para carregar imagem local e converter para Base64
+    function carregarImagemLocal() {
+      DOM.localImageFileInput.click();
+    }
+
+    function onLocalImageFileSelected() {
+      var file = DOM.localImageFileInput.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        DOM.imageUrl.value = e.target.result; // Preenche o campo URL com o Data URL (Base64)
+        if (!DOM.imageAltText.value) {
+          // Preenche o alt text com o nome do arquivo se ainda não houver
+          DOM.imageAltText.value = file.name.split('.').slice(0, -1).join('.');
+        }
+        DOM.imageAltText.focus();
+        setStatus('Imagem local carregada como Data URL (Base64).', false);
+      };
+      reader.onerror = function () {
+        setStatus('Erro ao ler arquivo de imagem local.', true);
+      };
+      reader.readAsDataURL(file);
+      DOM.localImageFileInput.value = ''; // Limpa o input para permitir nova seleção
+    }
+
+    function init() {
+      DOM.imageCancel.addEventListener('click', fechar);
+      DOM.imageConfirm.addEventListener('click', confirmar);
+
+      // Evento para o novo botão "Carregar do PC"
+      DOM.btnLocalImage.addEventListener('click', carregarImagemLocal);
+      // Evento para o input de arquivo oculto
+      DOM.localImageFileInput.addEventListener('change', onLocalImageFileSelected);
+
+      // Evento de clique duplo no campo URL da imagem
+      DOM.imageUrl.addEventListener('dblclick', carregarImagemLocal);
+
+      [DOM.imageUrl, DOM.imageAltText].forEach(function (input) {
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); confirmar(); } });
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && DOM.imageModal.classList.contains('open')) fechar();
+      });
+      DOM.imageModal.addEventListener('click', function (e) { if (e.target === DOM.imageModal) fechar(); });
+    }
+    return { init, abrir };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: Exportar
+  ═══════════════════════════════════════════════════════════════ */
+  var Exportar = (function () {
+    function md() {
+      var blob = new Blob([DOM.textarea.value], { type: 'text/markdown;charset=utf-8' });
+      var a    = document.createElement('a');
+      a.href   = URL.createObjectURL(blob);
+      a.download = getNomeArquivo() + '.md';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+    function pdf() {
+      var win = window.open('', '_blank', 'width=960,height=720');
+      if (!win) { alert('Permita pop-ups neste site para exportar o PDF.'); return; }
+      var html =
+        '<!DOCTYPE html><html lang="pt-BR"><head>' +
+        '<meta charset="UTF-8">' +
+        '<title>' + getNomeArquivo() + '</title>' +
+        '<style>' + PDF_CSS + '</style>' +
+        '</head><body>' + DOM.preview.innerHTML + '</body></html>';
+      win.document.write(html);
+      win.document.close();
+      win.onload = function () {
+        setTimeout(function () { win.focus(); win.print(); win.close(); }, CONFIG.pdfPrintDelay);
+      };
+    }
+    function init() {
+      DOM.btnMd.addEventListener('click',  md);
+      DOM.btnPdf.addEventListener('click', pdf);
+    }
+    return { init, md, pdf };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     MÓDULO: EventosEditor
+  ═══════════════════════════════════════════════════════════════ */
+  var EventosEditor = (function () {
+    function init() {
+      ['keyup', 'click', 'mouseup', 'touchend', 'scroll'].forEach(function (ev) {
+        DOM.textarea.addEventListener(ev, Editor.capturar);
+      });
+      DOM.textarea.addEventListener('input', function () {
+        Editor.renderizar(false);
+      });
+    }
+    return { init };
+  }());
+
+  /* ═══════════════════════════════════════════════════════════════
+     CONTEÚDO INICIAL
+  ═══════════════════════════════════════════════════════════════ */
+  var CONTEUDO_INICIAL = [
     '# Titulo do Documento',
     '',
     'Escreva seu **Markdown** aqui.',
@@ -938,6 +1329,10 @@
     '- `codigo inline`',
     '- [Links](https://exemplo.com)',
     '',
+    '## Imagens',
+    '',
+    '![Logo Anthropic](https://www.anthropic.com/images/logo.svg)',
+    '',
     '## Tabela',
     '',
     '| Acao    | Atalho   |',
@@ -946,13 +1341,40 @@
     '| Italico | Ctrl + I |',
     '| Tachado | Ctrl + D |',
     '| Link    | Ctrl + K |',
+    '| Salvar  | Ctrl + S |',
     '',
     '> Dica: clicar em formatacao ja aplicada **remove** o efeito.',
   ].join('\n');
-  capturarEstado(); // garante snapshot atualizado antes de qualquer mudança
-  atualizarPreview();
 
-})();
+  /* ═══════════════════════════════════════════════════════════════
+     INICIALIZAÇÃO
+  ═══════════════════════════════════════════════════════════════ */
+  MarkdownRenderer.configurar();
+  EventosEditor.init();
+  Toolbar.init();
+  Atalhos.init();
+  SeletorCor.init();
+  ImageModal.init(); // Módulo para imagens por URL/Local
+  Resizer.init();
+  ScrollSync.init();
+  LinkModal.init();
+  Exportar.init();
+  GerenciadorArquivo.init();
+
+  // Avisa se FSA não é suportado
+  if (!FSA_SUPORTADO) {
+    setStatusRight('Navegador sem File System API — salvar fará download');
+  } else {
+    setStatusRight('File System API disponível ✓');
+  }
+
+  DOM.editorPane.style.width = CONFIG.editorLarguraInicial;
+  DOM.textarea.value         = CONTEUDO_INICIAL;
+  Editor.capturar();
+  Editor.renderizar(true);
+
+}());
 </script>
+
 </body>
 </html>
